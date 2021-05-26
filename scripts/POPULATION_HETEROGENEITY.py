@@ -74,7 +74,7 @@ class POPULATION_HETEROGENEITY():
             for pop in populations:
                 for cancer_het in cancer_heterogeneity:
                     for tissue_het in tissue_heterogeneity:
-                        code = f"_{context}{suffix}_{pop}_{cancer_het}_{tissue_het}"
+                        code = f"_{context}_{pop}_{cancer_het}_{tissue_het}"
 
                         if context == "C":
                             if tissue_het != "00":

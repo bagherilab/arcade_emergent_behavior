@@ -44,4 +44,4 @@ class DEFAULT():
             print(f"{name} : {code}")
 
             tar = tarfile.open(infile)
-            func(tar, timepoints, { "case": case }, outfile, code)
+            func(tar, timepoints, { "case": case }, outfile, code, exclude=[36])

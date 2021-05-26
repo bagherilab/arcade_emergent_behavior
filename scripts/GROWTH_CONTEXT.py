@@ -48,7 +48,7 @@ class GROWTH_CONTEXT():
 
         for context, suffix, exclude in contexts:
             for pop in populations:
-                code = f"_{context}{suffix}_{pop}"
+                code = f"_{context}_{pop}"
                 infile = f"{input_path}{name}{extension}/{name}_{context}_{pop}{extension}.tar.xz"
                 print(f"{name} : {code}")
 
