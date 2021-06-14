@@ -1,0 +1,117 @@
+<!DOCTYPE html>
+<html>
+    <head>
+        <meta charset="utf-8">
+        <link rel="stylesheet" href="css/style.css" />
+        <script src="https://d3js.org/d3.v4.min.js"></script>
+        <script type="text/javascript" src="js/browser.js"></script>
+        <script type="text/javascript" src="js/functions.js"></script>
+        <script type="text/javascript" src="js/utilities.js"></script>
+    </head>
+    <body>
+        <h1>random distribution</h1>
+        <div id="buttons">
+            <button id="generate">GENERATE</button>
+            <button id="save">SAVE</button>
+        </div>
+        <div id="canvas"></div>
+        <script>
+            var PREFIX = "random_distribution"
+            var SIZE = { "width": 800, "height": 400 }
+            var OPTIONS = [ ]
+            var SELECTED = { }
+            var LABELS = {
+                "types": {
+                    "4": "proliferative",
+                    "3": "migratory",
+                    "2": "quiescent",
+                    "1": "apoptotic",
+                    "5": "necrotic",
+                    "6": "senescent"
+                },
+                "times": {
+                    "010": "day 0",
+                    "080": "day 7",
+                    "150": "day 14",
+                }
+            }
+
+            initialize()
+
+            function PROCESSOR() {
+                let selected = {
+                    "types": ["1", "2", "3", "4", "5", "6"],
+                    "times": ["010", "080", "150"]
+                }
+
+                let name = function(arr) { return "DEFAULT/DEFAULT.DISTRIBUTION.csv" }
+
+                let layout = ["types", "times"]
+                let make = processMake(layout, selected, [0, 1], name)
+                let p = processGrid(layout, selected, make)
+
+                return {
+                    "selected": selected,
+                    "layout": layout,
+                    "files": p.files,
+                    "margin": { "left": p.marginLeft, "top": p.marginTop, "right": 5, "bottom": 5, "axis": AXIS_PADDING },
+                    "cols": p.nCols,
+                    "rows": p.nRows,
+                    "axis": {
+                        "x": {
+                            "scale": 30/1000, // hexagons => mm
+                            "bounds": [0, 0.3], // [mm]
+                            "title": "Distance from Center (mm)",
+                            "n": 4
+                        },
+                        "y": {
+                            "bounds": [0, 2], // [mm]
+                            "title": "Fraction Occupancy",
+                            "n": 3
+                        }
+                    }
+                }
+            }
+
+            function PARSER(code, S, D) {
+                let data = []
+
+                let x = D.data
+                    .filter(e => e.time == "0.0")
+                    .filter(e => e.case == "C")
+                    .filter(e => ("height" in e ? e.height == "0" : true))
+                    .map(e => Number(e.radius)*S.axis.x.scale)
+
+                let filtered = D.data
+                    .filter(f => f.time.replace(".","").padStart(3,"0") == S.selected.times[D.i[1]])
+                    .filter(e => ("height" in e ? e.height == "0" : true))
+
+                let cases = ["C", "random_R1", "random_R5"]
+                let colors = ["#000", "#000", "#999"]
+                let dash = ["none", "3,1.5", "3,1.5"]
+
+                for (let i = 0; i < 3; i++) {
+                    let y = filtered
+                        .filter(e => e.case == cases[i])
+                        .map(e => Number(e["TYPE_" + S.selected.types[D.i[0]] + "_avg"]))
+
+                    data.push({
+                        "*": "path",
+                        "x": x,
+                        "y": y,
+                        "fill": "none",
+                        "stroke": colors[i],
+                        "dash": dash[i],
+                        "width": 1.5
+                    })
+                }
+
+                return { "data": [{ "id": "X", "x": 0, "y": 0, "data": data }], "rows": 1, "cols": 1 }
+            }
+
+            function LABELLER(S, P) { return labelGrid(S, P) }
+
+            function DECORATOR(g, S, i, p) { decorateTicks(g, S, i, p) }
+        </script>
+    </body>
+</html>

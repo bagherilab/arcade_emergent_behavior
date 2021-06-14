@@ -118,14 +118,17 @@ def make_default_singles(file, out):
 # NCI-60 =======================================================================
 
 def calculate_doubling_time(seed, inds, tp):
+    """Calculates doubling time between given timepoints."""
     n0 = get_count(inds[seed][0])
     nf = get_count(inds[seed][1])
     return (tp[1]*24 - tp[0]*24)/((np.log(nf) - np.log(n0))/np.log(2))
 
 def calculate_doubling_times(N, tp, inds):
+    """Calculates doubling time for all seeds."""
     return [calculate_doubling_time(i, inds, tp) for i in range(0, N)]
 
 def make_doubling_time(file, out):
+    """Extract doubling time from simulations."""
     D, R, H, T, N, C, _, _ = load(f"{file}DEFAULT/DEFAULT_C.pkl")
     tp = [2, 16]
     inds = [[get_inds(D["agents"], j, i, H, [-1]) for i in tp] for j in range(0, N)]
@@ -136,9 +139,11 @@ def make_doubling_time(file, out):
     save_json(out, doubling, f".DOUBLING")
 
 def func_exponential(t, no, r):
+    """Exponential fit function."""
     return no*np.exp(np.array(t)*r)
 
 def make_exponential_fit(file, out):
+    """Fits simulation data with exponential equation."""
     jsn = load_json(f"{out}.SINGLES.json")
     T = jsn['T']
     diams = [[x*30.0 for x in j] for j in jsn['DIAMETERS_C']]
@@ -175,6 +180,7 @@ def make_exponential_fit(file, out):
 # MOON =========================================================================
 
 def make_moon_fit(file, out):
+    """Extracts simulation values for fitting moon equation."""
     D, R, H, T, N, C, _, _ = load(f"{file}DEFAULT/DEFAULT_C.pkl")
     inds = [[get_inds(D["agents"], j, i, H, [-1]) for i in range(0, len(T))] for j in range(0, N)]
     counts = get_temporal_counts(T, N, inds)
@@ -192,10 +198,12 @@ def make_moon_fit(file, out):
     save_csv(out, header, elements, ".MOON")
 
 def func_moon(X, a, b, c):
+    """Equation relating colony diameter, average cell volume, and cell diameter."""
     D, d = X
     return a*np.power(D,b)/np.power(d,c)
 
 def calculate_moon_fit(file, out):
+    """Calculate git of moon equation to simulated data."""
     with open(f"{out}.MOON.csv", 'r') as csvfile:
         reader = csv.reader(csvfile, delimiter=',')
         data = [row for row in reader]
@@ -216,4 +224,25 @@ def calculate_moon_fit(file, out):
     r2 = 1 - (ss_res/ss_tot)
 
     print(popt, r2)
+
+# RANDOM DISTRIBUTION ==========================================================
+
+def make_random_distribution(file, out):
+    """Combine cell state distributions for random simulations."""
+    tar = load_tar(out, ".DISTRIBUTION")
+    values = []
+
+    for case in ["C", "H", "random_R1", "random_R5"]:
+        filepath = f"{out}_{case}.DISTRIBUTION.csv"
+
+        if tar:
+            D = load_csv(filepath.split("/")[-1], tar=tar)
+        else:
+            D = load_csv(filepath)
+
+        header = ["case"] + D[0]
+        rows = [[case] + r for r in D[1:]]
+        values = values + rows
+
+    save_csv(out, ",".join(header) + "\n", zip(*values), ".DISTRIBUTION")
 
