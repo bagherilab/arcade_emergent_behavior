@@ -39,6 +39,12 @@ function shadeColor(color, percent) {
     return "#" + (0x1000000 + r + g + b).toString(16).slice(1)
 }
 
+function linspace(start, end, n) {
+    let delta = (end - start)/(n - 1)
+    let bins = d3.range(start, end + delta, delta).slice(0, n)
+    return bins.map(e => Number((parseFloat(e).toPrecision(12))))
+}
+
 // -----------------------------------------------------------------------------
 
 function makeHex() {
@@ -70,6 +76,81 @@ function makeHorzLabel(w, x, y, text, fill) {
         "w": w, "h": LABEL_SIZE, "x": x, "y": y - LABEL_SIZE, "text": text, "fill": fill,
         "tx": x + w/2, "ty": y - FONT_PADDING, "rotate": false
     }
+}
+
+
+// -----------------------------------------------------------------------------
+
+function makeVertTicks(S, x, y, axis, scale) {
+    let bounds = axis.bounds
+    let padding = axis.padding ? axis.padding : 0
+    let ticks = linspace(bounds[0], bounds[1], axis.n).map(d => (Math.abs(d) < 10E-10 ? 0 : d))
+    let t = []
+
+    if (!scale) {
+        scale = d3.scaleLinear().range([S.panel.h - SUBPANEL_PADDING - AXIS_PADDING.bottom, 0]).domain([bounds[0] - padding, bounds[1] + padding])
+    }
+
+    for (let i = 0; i < ticks.length; i++) {
+        t.push({
+            "tx": x - (FONT_SIZE - 2) - 3 - FONT_PADDING,
+            "ty": y + scale(ticks[i]) + (FONT_SIZE - 2)/2,
+            "y1": y + scale(ticks[i]),
+            "y2": y + scale(ticks[i]),
+            "x1": x,
+            "x2": x - 3,
+            "text": (axis.labels ? axis.labels(ticks[i], i) : ticks[i]),
+        })
+    }
+
+    return t
+}
+
+function makeHorzTicks(S, x, y, axis, scale) {
+    let bounds = axis.bounds
+    let padding = axis.padding ? axis.padding : 0
+    let ticks = linspace(bounds[0], bounds[1], axis.n).map(d =>(Math.abs(d) < 10E-10 ? 0 : d))
+    let t = []
+
+    if (!scale) {
+        scale = d3.scaleLinear().range([0, S.subpanel.w]).domain([bounds[0] - padding, bounds[1] + padding])
+    }
+
+    for (let i = 0; i < ticks.length; i++) {
+        t.push({
+            "tx": x + scale(ticks[i]),
+            "ty": y + 3 + FONT_SIZE - 2 + FONT_PADDING,
+            "y1": y,
+            "y2": y + 3,
+            "x1": x + scale(ticks[i]),
+            "x2": x + scale(ticks[i]),
+            "text": (axis.labels ? axis.labels(ticks[i], i) : ticks[i]),
+        })
+    }
+
+    return t
+}
+
+// -----------------------------------------------------------------------------
+
+function alignVertAxis(S, i) {
+    return PANEL_PADDING/2 + SUBPANEL_PADDING/2 + S.margin.axis.top
+        + (i.length < 2 ? 0 : i.length < 4 ? S.panel.dh*i[1] :
+            S.panel.dh*i[1]*S.selected[S.layout[3]].length + S.panel.dh*i[3])
+}
+
+function alignHorzAxis(S, i) {
+    return PANEL_PADDING/2 + SUBPANEL_PADDING/2 + S.margin.axis.left
+        + (i.length == 0 ? 0 : i.length < 3 ? S.panel.dw*i[0] :
+            S.panel.dw*i[0]*S.selected[S.layout[2]].length + S.panel.dw*i[2])
+}
+
+function alignVertText(S) {
+    return -5 - 2*FONT_PADDING - (FONT_SIZE - 2)*2
+}
+
+function alignHorzText(S) {
+    return S.subpanel.h + LABEL_SIZE + 5 + FONT_SIZE - 2 + 2*FONT_PADDING
 }
 
 // -----------------------------------------------------------------------------
@@ -129,3 +210,23 @@ function addLabels(g, labels) {
         .attr("y", d => d.ty)
 }
 
+function addTicks(g, ticks) {
+    let G = g.selectAll("g").data(ticks).enter().append("g")
+
+    G.selectAll("line")
+        .data(d => d).enter().append("line")
+            .attr("x1", d => d.x1 )
+            .attr("x2", d => d.x2 )
+            .attr("y1", d => d.y1 )
+            .attr("y2", d => d.y2 )
+            .attr("stroke", "#000")
+
+    G.selectAll("text")
+        .data(d => d).enter().append("text")
+            .html(d => d.text)
+            .attr("font-size", (FONT_SIZE - 2) + "pt")
+            .attr("font-family", "Helvetica")
+            .attr("text-anchor", "middle")
+            .attr("x", d => d.tx)
+            .attr("y", d => d.ty)
+}

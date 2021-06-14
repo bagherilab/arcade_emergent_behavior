@@ -111,6 +111,25 @@ function processGrid(layout, selected, make) {
 
 // PLOTTERS ====================================================================
 
+function plotPath(g, S) {
+    g.append("path")
+        .attr("d", function(d) {
+            let xscale = (d.scale ? S.xscale[d.scale.x] : S.xscale)
+            let yscale = (d.scale ? S.yscale[d.scale.y] : S.yscale)
+            let makePath = d3.line()
+                .x(m => xscale(m))
+                .y((m,i) => yscale(d.y[i]))
+            return makePath(d.x)
+        })
+        .attr("fill", "none")
+        .attr("stroke", d => (d.stroke ? d.stroke : "#555"))
+        .attr("stroke-width", d => (d.width ? d.width : 1))
+        .attr("opacity", d => (d.opacity ? d.opacity : null))
+        .attr("stroke-linecap", d => (d.linecap ? d.linecap : null))
+        .attr("stroke-dasharray", d => (d.dash ? d.dash : null))
+        .attr("stroke-dashoffset", d => (d.offset ? d.offset : null))
+}
+
 function plotSymbol(g, S) {
     g.selectAll("use")
         .data(function(d) {
@@ -171,3 +190,32 @@ function labelTwo(S, P) {
     return labels
 }
 
+// DECORATORS ==================================================================
+
+function decorateTicks(g, S, i, p) {
+    addBorder(g, S.subpanel.w, S.subpanel.h, "#ccc")
+
+    // Create and align groups for ticks.
+    let dx = alignHorzAxis(S, i)
+    let dy = alignVertAxis(S, i)
+
+    // Create group to hold ticks.
+    let G = S.G.append("g")
+        .attr("id", "ticks")
+        .attr("transform", "translate(" + dx + "," + dy + ")")
+
+    let A = S.axis
+
+    // Create ticks.
+    let ticks = []
+    ticks.push(makeHorzTicks(S, 0, S.subpanel.h, A.x))
+    ticks.push(makeVertTicks(S, 0, 0, A.y))
+
+    // Create axis labels.
+    let labels = []
+    labels.push(makeHorzLabel(S.subpanel.w, 0, alignHorzText(S), A.x.title, "none"))
+    labels.push(makeVertLabel(S.subpanel.h, alignVertText(S), 0, A.y.title, "none"))
+
+    addTicks(G, ticks)
+    addLabels(G, labels)
+}

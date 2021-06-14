@@ -21,6 +21,15 @@ var AXIS_EMPTY = {
     "right": 0
 }
 
+var AXIS_PADDING = {
+    "bottom": LABEL_SIZE + 5 + 2*FONT_PADDING + FONT_SIZE - 2,
+    "left": LABEL_SIZE + 5 + 2*FONT_PADDING + (FONT_SIZE - 2)*2,
+    "top": 0,
+    "right": 0
+}
+
+var EXP = function(e) { return '<tspan baseline-shift="super" font-size="70%">' + e + '</tspan>' }
+
 var COLORS = {
     "types": ["#555", "#EDAD08", "#087644", "#1D6996", "#993333", "#442B5E", "#E17C05"]
 }
@@ -37,6 +46,30 @@ function initialize(id, plot) {
 
     // Add event listeners for buttons.
     document.getElementById("generate").addEventListener("click", generate)
+}
+
+function listen() {
+    let input = this.type
+    let name = this.name
+    let id = this.id.split("_")
+    if (id.length == 3) { id[1] = id[1] + "_" + id[2] }
+
+    // Update selection dictionary.
+    if (input === "checkbox") { SELECTED.checks[id[0]][MAP[id[0]][id[1]]] = this.checked }
+    else if (input === "radio") { SELECTED.radios[id[0]] = id[1] }
+}
+
+function update(id, e) {
+    for (let i = 0; i < e.length; i++) {
+        let eid = e[i].id.split("_")
+        if (eid.length == 3) { eid[1] = eid[1] + "_" + eid[2] }
+
+        if (e[i].type == "checkbox") {
+            e[i].checked = SELECTED.checks[eid[0]][MAP[eid[0]][eid[1]]]
+        } else if (e[i].type == "radio") {
+            if (eid[1] === SELECTED.radios[eid[0]]) { e[i].checked = true }
+        }
+    }
 }
 
 // SVG GENERATOR ===============================================================
@@ -213,6 +246,27 @@ function translate(x, y) {
 function clip(id) {
     let id_split = id.split("/")
     return "clip-" + id_split[id_split.length - 1]
+}
+
+function empty(g, text, w, h) {
+    let t = text.split("/")
+    t = t[t.length - 1].replace(".csv","")
+
+    g.append("rect")
+        .attr("width", w)
+        .attr("height", h)
+        .attr("fill", "#999")
+        .attr("stroke", "#555")
+        .attr("opacity", 0.5)
+
+    g.append("text")
+        .text(t)
+        .attr("x", w/2)
+        .attr("y", h/2 + 5)
+        .attr("font-family", "Courier")
+        .attr("font-size", "10pt")
+        .attr("fill", "#fff")
+        .attr("text-anchor", "middle")
 }
 
 function updateSettings(P, pad, dw, dh) {

@@ -1,0 +1,164 @@
+<!DOCTYPE html>
+<html>
+    <head>
+        <meta charset="utf-8">
+        <link rel="stylesheet" href="css/style.css" />
+        <script src="https://d3js.org/d3.v4.min.js"></script>
+        <script type="text/javascript" src="js/browser.js"></script>
+        <script type="text/javascript" src="js/functions.js"></script>
+        <script type="text/javascript" src="js/utilities.js"></script>
+    </head>
+    <body>
+        <h1>default singles</h1>
+        <div id="buttons">
+            <button id="generate">GENERATE</button>
+            <button id="save">SAVE</button>
+        </div>
+        <div id="options">
+            <div id="contexts">
+                <strong>CONTEXT</strong>
+                <label class="inputs"><input type="radio" name="context" id="context_C">colony</label>
+                <label class="inputs"><input type="radio" name="context" id="context_H">tissue</label>
+            </div>
+            <div id="metrics">
+                <strong>CONTEXT</strong>
+                <label class="inputs"><input type="radio" name="metric" id="metric_COUNTS">counts</label>
+                <label class="inputs"><input type="radio" name="metric" id="metric_DIAMETERS">diameter</label>
+            </div>
+        </div>
+        <div id="canvas"></div>
+        <script>
+            var PREFIX = "default_singles"
+            var SIZE = { "width": 400, "height": 400 }
+            var OPTIONS = ["contexts", "metrics"]
+            var SELECTED = {
+                "radios": {
+                    "context": "C",
+                    "metric": "COUNTS"
+                }
+            }
+            var LABELS = { }
+
+            initialize()
+
+            var Y_AXIS = {
+                "C_COUNTS": {
+                    "scale": 0.01, // cells => 10^2 cells
+                    "bounds": [0, 4], // 10^2 cells
+                    "title": 'Cell Count (10' + EXP(2) + ' colony cells)',
+                    "n": 3,
+                    "padding": 0.1
+                },
+                "H_COUNTS": {
+                    "scale": 0.001, // cells => 10^3 cells
+                    "bounds": [0, 4], // 10^3 cells
+                    "title": 'Cell Count (10' + EXP(3) + ' tissue cells)',
+                    "n": 3,
+                    "padding": 0.1
+                },
+                "C_DIAMETERS": {
+                    "scale": 30/1000, // hexagon => mm
+                    "bounds": [0, 0.6], // mm
+                    "title": 'Average Diameter (mm)',
+                    "n": 4,
+                    "padding": 0.01
+                },
+                "H_DIAMETERS": {
+                    "scale": 30/1000, // hexagon => mm
+                    "bounds": [0, 4], // mm
+                    "title": 'Average Diameter (mm)',
+                    "n": 5,
+                    "padding": 0.1
+                },
+            }
+
+            function PROCESSOR() {
+                let selected = {
+                    "context": SELECTED.radios.context,
+                    "metric": SELECTED.radios.metric,
+                }
+
+                let layout = []
+                let name = function(arr, sub) { return "DEFAULT/DEFAULT.SINGLES.json" }
+                let make = processMake(layout, selected, [[]], name)
+                let p = processGrid(layout, selected, make)
+
+                return {
+                    "selected": selected,
+                    "layout": layout,
+                    "files": p.files,
+                    "margin": { "left": p.marginLeft, "top": 5, "right": 5, "bottom": 5,
+                        "axis": AXIS_PADDING },
+                    "cols": p.nCols,
+                    "rows": p.nRows,
+                    "axis": {
+                        "x": {
+                            "bounds": [1, 15],
+                            "title": "Time (weeks)",
+                            "n": 3,
+                            "padding": 0.1,
+                            "labels": (e, i) => i
+                        },
+                        "y": Y_AXIS[selected.context + "_" + selected.metric]
+                    }
+                }
+            }
+
+            function PARSER(code, S, D) {
+                let metric = S.selected.metric + "_" + S.selected.context
+                let x = D.data.T
+                let y = D.data[metric]
+
+                let data = y.map(function(e) {
+                    return {
+                        "*": "path",
+                        "x": x,
+                        "y": e.map(f => Number(f)*S.axis.y.scale),
+                        "width": 0.5,
+                        "stroke": "#000",
+                        "opacity": 0.4
+                    }
+                })
+
+                return { "data": [{ "id": "X", "x": 0, "y": 0, "data": data }], "rows": 1, "cols": 1 }
+            }
+
+            function LABELLER(S, P) { return labelGrid(S, P) }
+
+            function DECORATOR(g, S, i, p) {
+                decorateTicks(g, S, i, p)
+
+                let xscale = S.xscale
+                let yscale = S.yscale
+
+                if (S.selected.metric == "DIAMETERS" && S.selected.context == "C") {
+                    let G = g.append("g")
+                    let x0 = S.axis.x.bounds[0] + 2
+                    let x1 = S.axis.x.bounds[1]
+                    let y0 = 1*30/1000.0
+
+                    let addLine = function(G, slope) {
+                        let y1 = x1*slope + (y0 - x0*slope)
+                        return G.append("path")
+                            .attr("d", "m " + xscale(x0) + "," + yscale(y0)
+                                + " L " + xscale(x1) + "," + yscale(y1))
+                    }
+
+                    // slopes in um/day, data from Conger and Ziskin (1983)
+                    let rates_1 = [99.6, 28.5, 42.8, 31.2, 33.4, 66.5, 18.3, 42.4]
+                    rates_1.map((rate, i) => addLine(G, rate/1000.0)
+                        .attr('stroke', '#777')
+                        .attr("stroke-width", 0.5)
+                        .attr("stroke-dasharray", "2,1"))
+
+                    // slopes in um/hr, data from Bru et al. (2003)
+                    let rates_2 = [1.93, 1.85, 6.40, 0.94, 8.72, 1.34, 1.10, 1.89, 1.35, 5.10, 2.06, 3.73, 11.5, 5.83, 2.9]
+                    rates_2.map((rate, i) => addLine(G, rate/1000.0*24)
+                        .attr('stroke', '#777')
+                        .attr("stroke-width", 1)
+                        .attr("stroke-dasharray", "1,2"))
+                }
+            }
+        </script>
+    </body>
+</html>

@@ -45,3 +45,8 @@ class DEFAULT():
 
             tar = tarfile.open(infile)
             func(tar, timepoints, { "case": case }, outfile, code, exclude=[36])
+
+    @staticmethod
+    def call(output_path, input_path, func, name=NAME):
+        outfile = f"{output_path}{name}/{name}"
+        func(input_path, outfile)

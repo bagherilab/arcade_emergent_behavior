@@ -85,3 +85,30 @@ def save_default_states(file, extension, out):
     """Save merged cell states file."""
     save_csv(file, ','.join(out['header']) + "\n", zip(*out['data']), extension)
 
+# DEFAULT SINGLES ==============================================================
+
+def make_default_singles(file, out):
+    """Get single seed tracjectories for default simulations."""
+    c_file = f"{file}DEFAULT/DEFAULT_C.pkl"
+    D, R, H, T, N, C, _, _ = load(c_file)
+
+    c_inds = [[get_inds(D["agents"], j, i, H, [-1]) for i in range(0, len(T))] for j in range(0, N)]
+    c_counts = get_temporal_counts(T, N, c_inds)
+    c_diams = get_temporal_diameters(T, N, C, c_inds)
+
+    h_file = f"{file}DEFAULT/DEFAULT_H.pkl"
+    D, R, H, T, N, C, _, _ = load(h_file)
+    h_inds = [[get_inds(D["agents"], j, i, H, [-1]) for i in range(0, len(T))] for j in range(0, N)]
+    h_counts = get_temporal_counts(T, N, h_inds)
+    h_diams = get_temporal_diameters(T, N, C, h_inds)
+
+    singles = {
+        'T': T,
+        'COUNTS_C': c_counts,
+        'DIAMETERS_C': c_diams,
+        'COUNTS_H': h_counts,
+        'DIAMETERS_H': h_diams
+    }
+
+    save_json(out, singles, f".SINGLES")
+
