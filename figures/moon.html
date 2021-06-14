@@ -1,0 +1,133 @@
+<!DOCTYPE html>
+<html>
+    <head>
+        <meta charset="utf-8">
+        <link rel="stylesheet" href="css/style.css" />
+        <script src="https://d3js.org/d3.v4.min.js"></script>
+        <script type="text/javascript" src="js/browser.js"></script>
+        <script type="text/javascript" src="js/functions.js"></script>
+        <script type="text/javascript" src="js/utilities.js"></script>
+    </head>
+    <body>
+        <h1>moon</h1>
+        <div id="buttons">
+            <button id="generate">GENERATE</button>
+            <button id="save">SAVE</button>
+        </div>
+        <div id="canvas"></div>
+        <script>
+            var PREFIX = "moon"
+            var SIZE = { "width": 400, "height": 400 }
+            var OPTIONS = [ ]
+            var SELECTED = { }
+            var LABELS = { }
+
+            initialize()
+
+            function PROCESSOR() {
+                return {
+                    "selected": {},
+                    "layout": [],
+                    "files": [ { "x": 0, "y": 0, "i": [0], "file": "DEFAULT/DEFAULT.MOON.csv" } ],
+                    "margin": { "left": 5, "top": 5, "right": 5, "bottom": 5,
+                        "axis": AXIS_PADDING },
+                    "cols": 1,
+                    "rows": 1,
+                    "axis": {
+                        "x": { "bounds": [0, 160], "n": 5, "title": "Colony Diameter (&#956;m)", "padding": 2 },
+                        "y": { "bounds": [0, 40], "n": 5, "title": "Number of Cells in Colony", "padding": 1 },
+                        "c": { "bounds": [-10, 10] }
+                    }
+                }
+            }
+
+            function PARSER(code, S, D) {
+                let colors = [COLORMAPS['div'][0], "#ccc", COLORMAPS['div'][COLORMAPS['div'].length - 1]]
+                let cmap = d3.scaleLinear().range(colors).domain([S.axis.c.bounds[0], 0, S.axis.c.bounds[1]])
+                let max = 0
+                let min = 0
+                let n = 0
+                let sum = 0
+
+                let d = D.data
+                    .filter(e => e.time >= 1)
+                    .filter(e => Number(e.colony_diameter)*30 < 160)
+                    .map(function(e) {
+                        let count = Number(e.count);
+                        let colonyDiam = Number(e.colony_diameter)*30
+                        let cellDiam = Number(e.cell_diameter)
+                        let expCellDiam = Math.exp((Math.log(count) - 2.378*Math.log(colonyDiam) - 0.874)/-2.804)
+
+                        let diff = cellDiam - expCellDiam
+                        if (diff > max) { max = diff }
+                        if (diff < min ) { min = diff }
+                        sum = sum + diff
+                        n = n + 1
+
+                        return {
+                            "x": colonyDiam,
+                            "y": count,
+                            "fill": cmap(diff)
+                        }
+                    })
+
+                let data = [{
+                    "*": "circle",
+                    "x": d.map(e => e.x),
+                    "y": d.map(e => e.y),
+                    "r": 2,
+                    "fill": d.map(e => e.fill)
+                }]
+
+                console.log(max, min, sum/n)
+
+                return { "data": [{ "id": "X", "x": 0, "y": 0, "data": data }], "rows": 1, "cols": 1 };
+            }
+
+            function LABELLER(S, P) { return labelNone(S, P) }
+
+            function DECORATOR(g, S, i, p) {
+                decorateTicks(g, S, i, p)
+
+                let x = linspace(S.axis.x.bounds[0], S.axis.x.bounds[1], 100)
+                let cmap = d3.scaleLinear().domain([25,30,40]).range(["#888","#444","#000"])
+
+                let Ae = 2.40
+                let Be = 2.378
+                let Ce = 2.804
+
+                var experimental = function(D, d) {
+                    return D.map(e => Ae*Math.pow(e, Be)/Math.pow(d, Ce))
+                }
+
+                let As = 0.71
+                let Bs = 2.11
+                let Cs = 2.09
+
+                var simulation = function(D, d) {
+                    return D.map(e => As*Math.pow(e, Bs)/Math.pow(d, Cs))
+                }
+
+                let paths = []
+                let points = [25, 30, 40]
+
+                points.map(p => paths.push({ "x": x, "y": experimental(x, p), "dash": null, "stroke": cmap(p) } ))
+                points.map(p => paths.push({ "x": x, "y": simulation(x, p), "dash": "3,2", "stroke": cmap(p) } ))
+
+                g.append("g").selectAll("path")
+                    .data(paths)
+                    .enter().append("path")
+                    .attr("d", function(d) {
+                        let makeLine = d3.line()
+                            .x(m => S.xscale(m))
+                            .y((m, i) => S.yscale(d.y[i]))
+                        return makeLine(d.x)
+                    })
+                    .attr("fill", "none")
+                    .attr("stroke", d => d.stroke)
+                    .attr("stroke-width", "1px")
+                    .attr("stroke-dasharray", d => d.dash)
+            }
+        </script>
+    </body>
+</html>

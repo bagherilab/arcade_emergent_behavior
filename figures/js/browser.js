@@ -30,6 +30,10 @@ var AXIS_PADDING = {
 
 var EXP = function(e) { return '<tspan baseline-shift="super" font-size="70%">' + e + '</tspan>' }
 
+var COLORMAPS = {
+    "div": ["#2166ac","#67a9cf","#d1e5f0","#f7f7f7","#fddbc7","#ef8a62","#b2182b"],
+}
+
 var COLORS = {
     "types": ["#555", "#EDAD08", "#087644", "#1D6996", "#993333", "#442B5E", "#E17C05"]
 }

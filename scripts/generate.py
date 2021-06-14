@@ -1,5 +1,6 @@
 import numpy as np
 from .analyze import *
+from math import sqrt
 from scipy.optimize import curve_fit
 from scipy.stats import sem
 
@@ -127,7 +128,7 @@ def calculate_doubling_times(N, tp, inds):
 def make_doubling_time(file, out):
     D, R, H, T, N, C, _, _ = load(f"{file}DEFAULT/DEFAULT_C.pkl")
     tp = [2, 16]
-    inds = [[get_inds(D["agents"], j, i, H, [-1]) for i in tp] for j in range(0,N)]
+    inds = [[get_inds(D["agents"], j, i, H, [-1]) for i in tp] for j in range(0, N)]
     data = calculate_doubling_times(N, [T[tp[0]], T[tp[1]]], inds)
 
     print(np.mean(data), np.std(data, ddof=1))
@@ -170,4 +171,49 @@ def make_exponential_fit(file, out):
     print(np.mean(exponential), np.std(exponential, ddof=1))
 
     save_json(out, exponential, f".EXPONENTIAL")
+
+# MOON =========================================================================
+
+def make_moon_fit(file, out):
+    D, R, H, T, N, C, _, _ = load(f"{file}DEFAULT/DEFAULT_C.pkl")
+    inds = [[get_inds(D["agents"], j, i, H, [-1]) for i in range(0, len(T))] for j in range(0, N)]
+    counts = get_temporal_counts(T, N, inds)
+    volumes = get_temporal_volumes(D["agents"], T, N, inds)
+
+    colony_diameters = get_temporal_diameters(T, N, C, inds)
+    average_volumes = [[v/c if c != 0 else np.nan for c, v in zip(cou, vol)] for cou, vol in zip(counts, volumes)]
+    cell_diameters = [[2*sqrt(average_volumes[seed][time]/np.pi/4.35)
+        for time in range(0, len(T))]
+        for seed in range(0, N)]
+
+    elements = zip(*[[n, e, counts[n][t], colony_diameters[n][t], cell_diameters[n][t]]
+        for n in range(0, N) for t, e in enumerate(T)])
+    header = 'seed,time,count,colony_diameter,cell_diameter\n'
+    save_csv(out, header, elements, ".MOON")
+
+def func_moon(X, a, b, c):
+    D, d = X
+    return a*np.power(D,b)/np.power(d,c)
+
+def calculate_moon_fit(file, out):
+    with open(f"{out}.MOON.csv", 'r') as csvfile:
+        reader = csv.reader(csvfile, delimiter=',')
+        data = [row for row in reader]
+
+    data = data[1:]
+    data = np.array([[float(x) for x in d] for d in data if float(d[1]) >= 1 and float(d[3])*30 < 160])
+
+    N = data[:,2]
+    D = data[:,3]*30
+    d = data[:,4]
+
+    p0 = 2.4, 2.378, 2.804
+    popt, pcov = curve_fit(func_moon, (D, d), N, p0)
+
+    residuals = N - func_moon((D, d), *popt)
+    ss_res = np.sum(residuals**2)
+    ss_tot = np.sum((N - np.mean(N))**2)
+    r2 = 1 - (ss_res/ss_tot)
+
+    print(popt, r2)
 
