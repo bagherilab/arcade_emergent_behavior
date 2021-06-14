@@ -14,19 +14,34 @@
             <button id="generate">GENERATE</button>
             <button id="save">SAVE</button>
         </div>
+        <div id="options">
+            <div id="views">
+                <strong>VIEW</strong>
+                <label class="inputs"><input type="radio" name="view" id="view_default">default</label>
+                <label class="inputs"><input type="radio" name="view" id="view_random">random</label>
+            </div>
+        </div>
         <div id="canvas"></div>
         <script>
             var PREFIX = "default_states"
             var SIZE = { "width": 331, "height": 485 }
-            var OPTIONS = [ ]
-            var SELECTED = { }
+            var OPTIONS = [ "views" ]
+            var SELECTED = {
+                "radios": {
+                    "view": "default",
+                }
+            }
             var LABELS = {
                 "cases": {
                     "C": "colony",
                     "H": "tissue",
+                    "random_R1": "R = 1",
+                    "random_R5": "R = 5",
                 },
                 "time": {
+                    "010": "day 0",
                     "050": "day 4",
+                    "080": "day 7",
                     "100": "day 9",
                     "150": "day 14",
                 }
@@ -36,8 +51,15 @@
 
             function PROCESSOR() {
                 let selected = {
-                    "cases": ["C", "H"],
-                    "time": ["050", "100", "150"]
+                    "view": SELECTED.radios.view,
+                }
+
+                if (SELECTED.radios.view == "default") {
+                    selected["cases"] = ["C", "H"]
+                    selected["time"] = ["050", "100", "150"]
+                } else {
+                    selected["cases"] = ["random_R1", "random_R5"]
+                    selected["time"] = ["010", "080", "150"]
                 }
 
                 let name = function(arr) { return "DEFAULT/DEFAULT.POSITIONS.csv" }
@@ -76,7 +98,7 @@
 
                 let data = [{
                     "*": "symbol",
-                    "bounds": (cases == "C" ? 10 : 20),
+                    "bounds": (cases == "C" ? 10 : (cases == "H" ? 20 : 5)),
                     "link": links,
                     "cx": cx,
                     "cy": cy,
@@ -112,7 +134,7 @@
                 addBorder(g, S.subpanel.w, S.subpanel.h, "#ccc")
                 if (i[1] == 0) {
                     let cases = S.selected.cases[i[0]]
-                    let diam = (cases == "C" ? 10 : 20)*2
+                    let diam = (cases == "C" ? 10 : (cases == "H" ? 20 : 5))*2
                     let scale = Math.min(S.subpanel.h/(diam + 1)/2, S.subpanel.w/(diam + 1)/2)
                     let DEFS = S.G.append("defs")
 
