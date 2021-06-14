@@ -1,5 +1,7 @@
 import numpy as np
 from .analyze import *
+from scipy.optimize import curve_fit
+from scipy.stats import sem
 
 # DEFAULT STATES ===============================================================
 
@@ -111,4 +113,61 @@ def make_default_singles(file, out):
     }
 
     save_json(out, singles, f".SINGLES")
+
+# NCI-60 =======================================================================
+
+def calculate_doubling_time(seed, inds, tp):
+    n0 = get_count(inds[seed][0])
+    nf = get_count(inds[seed][1])
+    return (tp[1]*24 - tp[0]*24)/((np.log(nf) - np.log(n0))/np.log(2))
+
+def calculate_doubling_times(N, tp, inds):
+    return [calculate_doubling_time(i, inds, tp) for i in range(0, N)]
+
+def make_doubling_time(file, out):
+    D, R, H, T, N, C, _, _ = load(f"{file}DEFAULT/DEFAULT_C.pkl")
+    tp = [2, 16]
+    inds = [[get_inds(D["agents"], j, i, H, [-1]) for i in tp] for j in range(0,N)]
+    data = calculate_doubling_times(N, [T[tp[0]], T[tp[1]]], inds)
+
+    print(np.mean(data), np.std(data, ddof=1))
+    doubling = { "data": data, "mean": np.mean(data) }
+    save_json(out, doubling, f".DOUBLING")
+
+def func_exponential(t, no, r):
+    return no*np.exp(np.array(t)*r)
+
+def make_exponential_fit(file, out):
+    jsn = load_json(f"{out}.SINGLES.json")
+    T = jsn['T']
+    diams = [[x*30.0 for x in j] for j in jsn['DIAMETERS_C']]
+    times = [x for x in T]
+
+    diams = [diam[2:] for diam in diams] # remove first two timepoints from diameters
+    times = times[:-2] # adjust time points by 1 day
+
+    fits = [np.polyfit(times, j, 1) for j in diams]
+    slopes = [f[0] for f in fits]
+    print(np.mean(slopes), np.std(slopes, ddof=1), sem(slopes))
+
+    counts = [j[2:17] for j in jsn['COUNTS_C']]
+    t = jsn['T'][0:15]
+    fits = [curve_fit(func_exponential, t, y, [0.1, 0.1]) for y in counts]
+    r2s = []
+
+    exponential = []
+
+    for y, fit in zip(counts, fits):
+        popt, pcov = fit
+        residuals = y - func_exponential(t, *popt)
+        ss_res = np.sum(residuals**2)
+        ss_tot = np.sum((y - np.mean(y))**2)
+        r2 = 1 - (ss_res/ss_tot)
+        r2s.append(r2)
+        exponential.append(np.log(2)/popt[1]*24) # calculate doubling based on exponential fit
+
+    print(np.mean(r2s), np.std(r2s, ddof=1))
+    print(np.mean(exponential), np.std(exponential, ddof=1))
+
+    save_json(out, exponential, f".EXPONENTIAL")
 

@@ -130,6 +130,56 @@ function plotPath(g, S) {
         .attr("stroke-dashoffset", d => (d.offset ? d.offset : null))
 }
 
+function plotViolin(g, S) {
+    let lineForward = d3.line()
+        .x(d => S.xscale(d.fx + d.dx))
+        .y(d => S.yscale(d.fy + d.dy))
+        .curve(d3.curveCardinal.tension(0.7))
+    let lineBackward = d3.line()
+        .x(d => S.xscale(d.rx + d.dx))
+        .y(d => S.yscale(d.ry + d.dy))
+        .curve(d3.curveCardinal.tension(0.7))
+
+    let makeViolin = function(d) {
+        if (d.direction == "horizontal") {
+            var hist = d.x.map(function(e, i) { return {
+                "v": e,
+                "fy": e, "fx": d.y[i],
+                "ry": -e, "rx": d.y[i],
+                "dy": d.offset + 0.5, "dx": 0
+            }})
+        } else {
+            var hist = d.y.map(function(e, i) { return {
+                "v": e,
+                "fx": e, "fy": d.x[i],
+                "rx": -e, "ry": d.x[i],
+                "dx": d.offset + 0.5, "dy": 0
+            }})
+        }
+
+        let splits = []
+        let ind = 0
+
+        for (let i = 1; i < hist.length - 1; i++) {
+            if (hist[i - 1].v == 0 && hist[i].v != 0) { ind = i }
+            if (hist[i + 1].v == 0 && hist[i].v != 0) {
+                let sub = hist.slice(ind - 1, i + 2)
+                splits.push(lineForward(sub) +  lineBackward(sub.reverse()).replace("M", "L") + "z")
+            }
+        }
+
+        return splits.join(" ")
+    }
+
+    g.append("path")
+        .attr("d", d => makeViolin(d))
+        .attr("fill", d => (d.fill ? d.fill : "none"))
+        .attr("stroke", d => (d.stroke ? d.stroke : "#555"))
+        .attr("stroke-width", d => (d.width ? d.width : 1))
+        .attr("stroke-dasharray", d => (d.dash ? d.dash : null))
+        .attr("opacity", d => (d.opacity ? d.opacity : null))
+}
+
 function plotSymbol(g, S) {
     g.selectAll("use")
         .data(function(d) {
@@ -154,6 +204,33 @@ function plotSymbol(g, S) {
         .attr("fill", d => d.fill)
         .attr("stroke", d => d.stroke)
         .attr("stroke-width", d => d.width)
+}
+
+function plotCircle(g, S) {
+    let R = Math.min(5, Math.max(2, Math.min(S.subpanel.dw, S.subpanel.dh)/100))
+    g.selectAll("circle")
+        .data(function(d) {
+            let xscale = (d.scale ? S.xscale[d.scale.x] : S.xscale)
+            let yscale = (d.scale ? S.yscale[d.scale.y] : S.yscale)
+
+            return d.x.map(function(e, i) {
+                return {
+                    "x": xscale(e),
+                    "y": yscale(d.y[i]),
+                    "r": (d.r ? (Array.isArray(d.r) ? d.r[i] : d.r ) : d.R ? Math.min(xscale(d.R), yscale(d.R)) : R),
+                    "fill": (d.fill ? (Array.isArray(d.fill) ? d.fill[i] : d.fill) : "#555"),
+                    "stroke": (d.stroke ? (Array.isArray(d.stroke) ? d.stroke[i] : d.stroke) : null),
+                    "opacity": (d.opacity ? (Array.isArray(d.opacity) ? d.opacity[i] : d.opacity) : null),
+                }
+            })
+        })
+        .enter().append("circle")
+            .attr("cx", d => d.x)
+            .attr("cy", d => d.y)
+            .attr("r", d => d.r)
+            .attr("fill", d => d.fill)
+            .attr("stroke", d => d.stroke)
+            .attr("opacity", d => d.opacity)
 }
 
 // LABELERS ====================================================================

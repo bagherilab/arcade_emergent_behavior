@@ -187,6 +187,16 @@ function addBorder(g, width, height, stroke) {
         .attr("stroke-width", "1px")
 }
 
+function addLine(g, x1, x2, y1, y2, stroke, width) {
+    return g.append("line")
+        .attr("x1", x1)
+        .attr("x2", x2)
+        .attr("y1", y1)
+        .attr("y2", y2)
+        .attr("stroke", stroke)
+        .attr("stroke-width", width)
+}
+
 function addLabels(g, labels) {
     let G = g.append("g").attr("id", "labels")
 
