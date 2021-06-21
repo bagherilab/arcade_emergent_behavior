@@ -4,6 +4,30 @@ from math import sqrt
 from scipy.optimize import curve_fit
 from scipy.stats import sem
 
+# GENERAL ANALYSIS FUNCTIONS ===================================================
+
+def merge_metrics(file, out, keys, extension, code, tar=None):
+    """Merge metrics across conditions."""
+    filepath = f"{file}{code}{extension}.json"
+
+    if tar:
+        D = load_json(filepath.split("/")[-1], tar=tar)
+    else:
+        D = load_json(filepath)
+
+    metric = extension.split(".")[-1]
+    keys["_Y"] = D['mean']
+
+    keys.pop('time', None)
+    out['data'].append(keys)
+    out['_X'] = D['_X']
+
+# ------------------------------------------------------------------------------
+
+def save_metrics(file, extension, out):
+    """Save merged metrics files."""
+    save_json(file, out, extension)
+
 # DEFAULT STATES ===============================================================
 
 def adjust_portion_size(arr, n):

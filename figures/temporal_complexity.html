@@ -1,0 +1,163 @@
+<!DOCTYPE html>
+<html>
+    <head>
+        <meta charset="utf-8">
+        <link rel="stylesheet" href="css/style.css" />
+        <script src="https://d3js.org/d3.v4.min.js"></script>
+        <script type="text/javascript" src="js/browser.js"></script>
+        <script type="text/javascript" src="js/functions.js"></script>
+        <script type="text/javascript" src="js/utilities.js"></script>
+    </head>
+    <body>
+        <h1>temporal complexity</h1>
+        <div id="buttons">
+            <button id="generate">GENERATE</button>
+            <button id="save">SAVE</button>
+        </div>
+        <div id="options">
+            <div id="metrics">
+                <strong>METRIC</strong>
+                <label class="inputs"><input type="radio" name="metric" id="metric_GROWTH">growth rate</label>
+                <label class="inputs"><input type="radio" name="metric" id="metric_SYMMETRY">symmetry</label>
+                <label class="inputs"><input type="radio" name="metric" id="metric_CYCLES">cycle length</label>
+            </div>
+            <div id="layout">
+                <strong>LAYOUT</strong>
+                <label class="inputs"><input type="radio" name="layout" id="layout_sig~meta">by signaling</label>
+                <label class="inputs"><input type="radio" name="layout" id="layout_meta~sig">by metabolism</label>
+            </div>
+        </div>
+        <div id="canvas"></div>
+        <script>
+            var PREFIX = "temporal_complexity"
+            var SIZE = { "width": 800, "height": 200 }
+            var OPTIONS = [ "metrics", "layout" ]
+            var SELECTED = {
+                "radios": {
+                    "metric": "GROWTH",
+                    "layout": "sig~meta"
+                }
+            }
+            var LABELS = {
+                "meta": {
+                    "R": "random",
+                    "S": "simple",
+                    "M": "medium",
+                    "C": "complex"
+                },
+                "sig": {
+                    "R": "random",
+                    "S": "simple",
+                    "M": "medium",
+                    "C": "complex"
+                },
+            }
+
+            initialize()
+
+            var Y_AXIS = {
+                "GROWTH": {
+                    "scale": 30, // hexagon/day => um/day
+                    "bounds": [0, 100], // mm/day
+                    "title": 'Growth Rate (\u03BCm/day)',
+                    "n": 3,
+                    "padding": 2
+                },
+                "SYMMETRY": {
+                    "scale": 1,
+                    "bounds": [0.4, 1], // unitless
+                    "title": 'Symmetry',
+                    "n": 4,
+                    "padding": 0.01
+                },
+                "CYCLES": {
+                    "scale": 1/60.0, // min => hours
+                    "bounds": [12, 36], // hours
+                    "title": 'Average Cell Cycle Length (hours)',
+                    "n": 3,
+                    "padding": 1
+                },
+            }
+
+            function PROCESSOR() {
+                let selected = {
+                    "metric": SELECTED.radios.metric,
+                    "meta": ["R", "S", "M", "C"],
+                    "sig": ["R", "S", "M", "C"],
+                    "layout": SELECTED.radios.layout,
+                }
+
+                let layout = selected.layout.split("~")[0].split(".")
+                let name = function(arr) {
+                    return "MODULE_COMPLEXITY/MODULE_COMPLEXITY.METRICS." + selected.metric + ".json"
+                }
+
+                let make = processMake(layout, selected, [], name)
+                let p = processGrid(layout, selected, make)
+
+                return {
+                    "selected": selected,
+                    "layout": layout,
+                    "files": p.files,
+                    "margin": {
+                        "left": p.marginLeft,
+                        "top": p.marginTop,
+                        "right": 5,
+                        "bottom": 5,
+                        "axis": AXIS_PADDING
+                    },
+                    "cols": p.nCols,
+                    "rows": p.nRows,
+                    "axis": {
+                        "x": {
+                            "bounds": [1, 15],
+                            "title": "Time (days)",
+                            "n": 3,
+                            "padding": 0.5
+                        },
+                        "y": Y_AXIS[selected.metric]
+                    }
+                }
+            }
+
+            function PARSER(code, S, D) {
+                let A = S.axis
+                let layout = S.layout[0]
+                let key = S.selected.layout.split("~")[1]
+                let d = D.data.data
+                    .filter(e => e[layout] == S.selected[layout][D.i[0]])
+                    .filter(e => contains(e[key], S.selected[key]))
+
+                let data = []
+
+                d.map(function(e) {
+                    let y = e['_Y'].map(e => Number(e)*A.y.scale)
+                    let remove = findNaNs(y)
+                    y = removeNaNs(y, remove)
+
+                    let x = D.data["_X"]
+                        .filter((e, i) => remove[i] )
+                        .map(e => Number(e))
+
+                    // Rescale symmetry metric denominator to 5 instead of 6.
+                    if (S.selected.metric == "SYMMETRY") { y = y.map(e => 1 - (6/5)*(1 - e)) }
+
+                    data.push({
+                        "*": "path",
+                        "x": x,
+                        "y": y,
+                        "width": 1.5,
+                        "stroke": COLORS[key][e[key]],
+                        "dash": e[key] == "R" ? "2,2" : null
+                    })
+                })
+
+                return { "data": [{ "id": "X", "x": 0, "y": 0, "data": data }], "rows": 1, "cols": 1 }
+            }
+
+            function LABELLER(S, P) { return labelGrid(S, P) }
+
+            function DECORATOR(g, S, i, p) { decorateTicks(g, S, i, p) }
+        </script>
+    </body>
+</html>

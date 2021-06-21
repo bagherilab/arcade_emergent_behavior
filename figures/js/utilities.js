@@ -45,6 +45,21 @@ function linspace(start, end, n) {
     return bins.map(e => Number((parseFloat(e).toPrecision(12))))
 }
 
+function contains(val, arr) {
+    for (let i = 0; i < arr.length; i++) { if (arr[i] == val) { return true }}
+    return false
+}
+
+// -----------------------------------------------------------------------------
+
+function findNaNs(arr) {
+    return arr.map((e, i) => !(Number.isNaN(e) || e == "nan"))
+}
+
+function removeNaNs(arr, remove) {
+    return arr.filter((e, i) => remove[i])
+}
+
 // -----------------------------------------------------------------------------
 
 function makeHex() {
@@ -154,6 +169,24 @@ function alignHorzText(S) {
 }
 
 // -----------------------------------------------------------------------------
+
+function compileSingleFiles(layout, selected, make) {
+    let files = []
+    let len = layout.map(d => selected[d].length)
+    let A = selected[layout[0]]
+
+    for (let a = 0; a < len[0]; a++) {
+        let f = make(A[a], a)
+        files.push({
+            "file": f.file,
+            "x": f.x,
+            "y": f.y,
+            "i": [a]
+        })
+    }
+
+    return files
+}
 
 function compileDoubleFiles(layout, selected, make) {
     let files = []

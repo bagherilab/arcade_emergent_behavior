@@ -238,11 +238,27 @@ function plotCircle(g, S) {
 function labelGrid(S, P) {
     switch(S.layout.length) {
         case 0: return labelNone(S, P)
+        case 1: return labelOne(S, P)
         case 2: return labelTwo(S, P)
     }
 }
 
 function labelNone(S, P) { return [] }
+
+function labelOne(S, P) {
+    let labels = []
+    let layout = S.layout
+
+    let L = layout.map(e => S.selected[e].filter(f => f != ""))
+
+    let outerX = function(e, i) {
+        return makeHorzLabel(S.panel.w, PANEL_PADDING/2 + S.panel.dw*i, 0,
+            LABELS[layout[0]][e], shadeColor("#aaaaaa", i/L[0].length))
+    }
+
+    L[0].map((e, i) => labels.push(outerX(e, i)))
+    return labels
+}
 
 function labelTwo(S, P) {
     let labels = []
