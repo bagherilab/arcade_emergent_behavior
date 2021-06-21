@@ -1,0 +1,237 @@
+<!DOCTYPE html>
+<html>
+    <head>
+        <meta charset="utf-8">
+        <link rel="stylesheet" href="css/style.css" />
+        <script src="https://d3js.org/d3.v4.min.js"></script>
+        <script type="text/javascript" src="js/browser.js"></script>
+        <script type="text/javascript" src="js/functions.js"></script>
+        <script type="text/javascript" src="js/utilities.js"></script>
+    </head>
+    <body>
+        <h1>module concentrations</h1>
+        <div id="buttons">
+            <button id="generate">GENERATE</button>
+            <button id="save">SAVE</button>
+        </div>
+        <div id="options">
+            <div id="modules">
+                <strong>MODULES</strong>
+                <label class="inputs"><input type="radio" name="module" id="module_IND">individual modules</label>
+                <label class="inputs"><input type="radio" name="module" id="module_BOTH">both modules</label>
+                <label class="inputs"><input type="radio" name="module" id="module_FULL">full rule set</label>
+            </div>
+        </div>
+        <div id="canvas"></div>
+        <script>
+            var PREFIX = "module_concentrations"
+            var SIZE = { "width": 400, "height": 600 }
+            var OPTIONS = [ "modules"]
+            var SELECTED = {
+                "radios": {
+                    "module": "FULL"
+                }
+            }
+            var LABELS = {
+                "molecule": {
+                    "glucose": "glucose",
+                    "oxygen": "oxygen",
+                    "tgfa": "TGFa",
+                },
+                "cases": {
+                    "meta": "Metabolism Module Only",
+                    "sig": "Signaling Module Only"
+                },
+                "time":  {
+                    "010": "t = 0",
+                    "080": "t = 7"
+                },
+            }
+
+            initialize()
+
+            var X_AXIS = {
+                "scale": 30/1000.0, // hexagons => mm
+                "bounds": [0, 0.3], // [mm]
+                "title": "Distance from Center (mm)",
+                "n": 4,
+                "padding": 0.001
+            }
+
+            var Y_AXIS = {
+                "glucose": {
+                    "source": 0.005,
+                    "bounds": [-0.1, 0.1],
+                    "title": "Relative Concentration",
+                    "n": 3,
+                    "padding": 0.01
+                },
+                "oxygen": {
+                    "source": 100,
+                    "bounds": [-1, 1],
+                    "title": "Relative Concentration",
+                    "n": 3,
+                    "padding": 0.1
+                },
+                "tgfa": {
+                    "source": 150,
+                    "bounds": [-2, 2],
+                    "title": "Relative Concentration",
+                    "n": 3,
+                    "padding": 0.2
+                },
+            }
+
+            function PROCESSOR() {
+                let selected = {
+                    "molecule": ["glucose", "oxygen", "tgfa"],
+                    "module": SELECTED.radios.module,
+                    "cases": ["meta", "sig"],
+                    "time": ["010", "080"],
+                }
+
+                let name = function(arr) {
+                    switch (selected.module) {
+                        case "IND":
+                            return "MODULE_COMPLEXITY/MODULE_COMPLEXITY.CONCENTRATIONS.M.json"
+                                + "~MODULE_COMPLEXITY/MODULE_COMPLEXITY.CONCENTRATIONS.S.json"
+                        case "BOTH":
+                            return "MODULE_COMPLEXITY/MODULE_COMPLEXITY.CONCENTRATIONS.B.json"
+                        case "FULL":
+                            return "MODULE_COMPLEXITY/MODULE_COMPLEXITY.CONCENTRATIONS.json"
+                    }
+                }
+
+                let layout = []
+                switch (selected.module) {
+                    case "IND":
+                        layout = ["cases", "molecule"]
+                        break
+                    case "BOTH": case "FULL":
+                        layout = ["time", "molecule"]
+                        break
+                }
+
+
+                let make = processMake(layout, selected, [0, 1], name)
+                let p = processGrid(layout, selected, make)
+
+                return {
+                    "selected": selected,
+                    "layout": layout,
+                    "files": p.files,
+                    "margin": { "left": p.marginLeft, "top": p.marginTop, "right": 5, "bottom": 5, "axis": AXIS_PADDING },
+                    "cols": p.nCols,
+                    "rows": p.nRows,
+                    "axis": {
+                        "keys": selected.molecule,
+                        "x": molecule => X_AXIS,
+                        "y": molecule => Y_AXIS[molecule],
+                    }
+                }
+            }
+
+            function PARSER(code, S, D) {
+                let data = []
+                let molecule = S.selected.molecule[D.i[1]]
+                let scale = S.axis.y(molecule).source
+
+                switch (S.selected.module) {
+                    case "IND":
+                        let cases = S.selected.cases[D.i[0]]
+                        d = D[cases == "meta" ? "data1" : "data2"].filter(e => e.time != "020")
+
+                        d.map(function(e) {
+                            let y = e[molecule].map(f => (f - scale)/scale)
+                            let x = y.map((f, i) => S.axis.x(molecule).scale*i)
+
+                            data.push({
+                                "*": "path",
+                                "scale": { "x": molecule, "y": molecule },
+                                "x": x,
+                                "y": y,
+                                "width": 1.5,
+                                "stroke": COLORS[cases][e[cases]],
+                                "dash": e.time == "010" ? null : (e.time == "020" ? "1,2" : "3,3")
+                            })
+                        })
+
+                        break
+                    case "BOTH": case "FULL":
+                        let dd = D.data
+                        if (S.selected.module == "FULL") { dd = dd.data }
+                        dd = dd.filter(e => e.time == S.selected.time[D.i[0]])
+
+                        dd.map(function(e) {
+                            let y = e[molecule].map(f => (f - scale)/scale)
+                            let x = y.map((f, i) => S.axis.x(molecule).scale*i)
+                            data.push({
+                                "*": "path",
+                                "scale": { "x": molecule, "y": molecule },
+                                "x": x,
+                                "y": y,
+                                "width": 1.5,
+                                "stroke": COLORS["meta"][e["meta"]],
+                            })
+                        })
+
+                        dd.map(function(e) {
+                            let y = e[molecule].map(f => (f - scale)/scale)
+                            let x = y.map((f, i) => S.axis.x(molecule).scale*i)
+                            data.push({
+                                "*": "circle",
+                                "scale": { "x": molecule, "y": molecule },
+                                "x": x.filter((f, i) => i%2 == 1),
+                                "y": y.filter((f, i) => i%2 == 1),
+                                "fill": COLORS["sig"][e["sig"]],
+                            })
+                        })
+                }
+
+                return { "data": [{ "id": "X", "x": 0, "y": 0, "data": data }], "rows": 1, "cols": 1 }
+            }
+
+            function LABELLER(S, P) { return labelGrid(S, P) }
+
+            function DECORATOR(g, S, i, p) {
+                addBorder(g, S.subpanel.w, S.subpanel.h, "#ccc")
+                addLine(g, 0, S.subpanel.w, S.subpanel.h/2, S.subpanel.h/2, "#ccc", "0.5px")
+
+                let A = S.axis
+                let molecule = S.selected.molecule[i[1]]
+
+                let yaxis = A.y(molecule)
+                let xaxis = A.x(molecule)
+
+                g.insert("g",":first-child").append("rect")
+                    .attr("x", 0)
+                    .attr("y", 0)
+                    .attr("width", S.xscale[molecule](5*30/1000.0))
+                    .attr("height", S.subpanel.dh)
+                    .attr("fill", "#eee")
+
+                // Create and align groups for ticks.
+                let dx = alignHorzAxis(S, i)
+                let dy = alignVertAxis(S, i)
+
+                // Create group to hold ticks.
+                let G = S.G.append("g")
+                    .attr("id", "ticks")
+                    .attr("transform", "translate(" + dx + "," + dy + ")")
+
+                // Create ticks.
+                let ticks = []
+                ticks.push(makeHorzTicks(S, 0, S.subpanel.h, xaxis, S.xscale[molecule]))
+                ticks.push(makeVertTicks(S, 0, 0, yaxis, S.yscale[molecule]))
+
+                // Create axis labels.
+                let labels = []
+                labels.push(makeHorzLabel(S.subpanel.w, 0, alignHorzText(S), xaxis.title, "none"))
+                labels.push(makeVertLabel(S.subpanel.h, alignVertText(S), 0, yaxis.title, "none"))
+
+                addTicks(G, ticks)
+                addLabels(G, labels)
+            }
+        </script>
+    </body>
+</html>

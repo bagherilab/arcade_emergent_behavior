@@ -50,3 +50,8 @@ class MODULE_COMPLEXITY():
 
                 tar = tarfile.open(infile)
                 func(tar, timepoints, { "meta": meta, "sig": sig }, outfile, code)
+
+    @staticmethod
+    def call(output_path, input_path, func, name=NAME):
+        outfile = f"{output_path}{name}/{name}"
+        func(input_path, outfile)

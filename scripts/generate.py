@@ -22,11 +22,32 @@ def merge_metrics(file, out, keys, extension, code, tar=None):
     out['data'].append(keys)
     out['_X'] = D['_X']
 
+def merge_concentrations(file, out, keys, extension, code, tar=None):
+    """Merge concentrations across conditions."""
+    filepath = f"{file}{code}{extension}.json"
+
+    if tar:
+        D = load_json(filepath.split("/")[-1], tar=tar)
+    else:
+        D = load_json(filepath)
+
+    index = D['_T'].index(unformat_time(keys['time']))
+    keys['glucose'] = D['glucose']['mean'][index]
+    keys['oxygen'] = D['oxygen']['mean'][index]
+    keys['tgfa'] = D['tgfa']['mean'][index]
+
+    out['data'].append(keys)
+    out['_X'] = D['_X']
+
 # ------------------------------------------------------------------------------
 
 def save_metrics(file, extension, out):
     """Save merged metrics files."""
     save_json(file, out, extension)
+def save_concentrations(file, extension, out):
+    """Save merged concentrations."""
+    save_json(file, out, extension)
+
 
 # DEFAULT STATES ===============================================================
 
@@ -270,3 +291,60 @@ def make_random_distribution(file, out):
 
     save_csv(out, ",".join(header) + "\n", zip(*values), ".DISTRIBUTION")
 
+# MODULE CONCENTRATIONS ========================================================
+
+def get_module_concentrations(tar, seeds, timepoints, radius, concentrations):
+    """Extracts concentration for all members of given tar."""
+    arr = np.zeros((seeds, len(timepoints), radius, len(concentrations)))
+    times = []
+
+    for i, member in enumerate(tar.getmembers()):
+        json = load_json(member, tar=tar)
+
+        for t, tind in enumerate(timepoints):
+            for c, conc in enumerate(concentrations):
+                concs = json['timepoints'][tind]['molecules'][conc]
+                arr[i,t,:,c] = np.array(concs[0])
+
+            if i == 0:
+                times.append(json["timepoints"][tind]["time"])
+
+    return arr, times
+
+def make_module_concentrations(file, out):
+    """Extract concentrations from modified module simulations."""
+
+    concentrations = ["glucose", "oxygen", "tgfa"]
+    complexities = ["R", "S", "M", "C"]
+    timepoints = [2, 4, 16]
+    name = out.split("/")[-1]
+    radius = 34
+    seeds = 20
+
+    for module, code, ext in [("metabolism", "meta", "M"), ("signaling", "sig", "S"), ("both", "", "B")]:
+        full_out = []
+
+        for comp1 in complexities:
+            for comp2 in complexities:
+                if module == "both":
+                    keys = { "meta": comp1, "sig": comp2 }
+                    filepath = f"{file}{name}/{name}_{module}_{comp1}_{comp2}.tar.xz"
+                elif comp2 == "R":
+                    keys = { code: comp1 }
+                    filepath = f"{file}{name}/{name}_{module}_{comp1}.tar.xz"
+                else:
+                    continue
+
+                tar = tarfile.open(filepath)
+                arr, times = get_module_concentrations(tar, seeds, timepoints, radius, concentrations)
+
+                for t, (tind, tvalue) in enumerate(zip(timepoints, times)):
+                    module_out = keys.copy()
+                    module_out["time"] = format_time(tvalue)
+
+                    for c, conc in enumerate(concentrations):
+                         module_out[conc] = np.mean(arr[:,t,:,c], axis=0).tolist()
+
+                    full_out.append(module_out)
+
+        save_json(out, full_out, f".CONCENTRATIONS.{ext}")
