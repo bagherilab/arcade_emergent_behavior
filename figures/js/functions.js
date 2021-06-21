@@ -130,6 +130,22 @@ function plotPath(g, S) {
         .attr("stroke-dashoffset", d => (d.offset ? d.offset : null))
 }
 
+function plotArea(g, S) {
+    g.append("path")
+        .attr("d", function(d) {
+            let xscale = (d.scale ? S.xscale[d.scale.x] : S.xscale)
+            let yscale = (d.scale ? S.yscale[d.scale.y] : S.yscale)
+            return d3.area()
+                .x(m => xscale(m))
+                .y0((m, i) => yscale(d.max[i]))
+                .y1((m, i) =>yscale(d.min[i]))(d.x)
+        })
+        .attr("fill", d => (d.fill ? d.fill : "#555"))
+        .attr("stroke", d => (d.stroke ? d.stroke : "none"))
+        .attr("stroke-width", d => (d.width ? d.width : "none"))
+        .attr("opacity", d => (d.opacity ? d.opacity : null))
+}
+
 function plotViolin(g, S) {
     let lineForward = d3.line()
         .x(d => S.xscale(d.fx + d.dx))

@@ -1,0 +1,166 @@
+<!DOCTYPE html>
+<html>
+    <head>
+        <meta charset="utf-8">
+        <link rel="stylesheet" href="css/style.css" />
+        <script src="https://d3js.org/d3.v4.min.js"></script>
+        <script type="text/javascript" src="js/browser.js"></script>
+        <script type="text/javascript" src="js/functions.js"></script>
+        <script type="text/javascript" src="js/utilities.js"></script>
+    </head>
+    <body>
+        <h1>state distribution</h1>
+        <div id="buttons">
+            <button id="generate">GENERATE</button>
+            <button id="save">SAVE</button>
+        </div>
+        <div id="options">
+            <div id="types">
+                <strong>TYPES</strong>
+                <label class="inputs"><input type="radio" name="type" id="type_1">apoptotic</label>
+                <label class="inputs"><input type="radio" name="type" id="type_2">quiescent</label>
+                <label class="inputs"><input type="radio" name="type" id="type_3">migratory</label>
+                <label class="inputs"><input type="radio" name="type" id="type_4">proliferative</label>
+                <label class="inputs"><input type="radio" name="type" id="type_5">senescent</label>
+                <label class="inputs"><input type="radio" name="type" id="type_6">necrotic</label>
+            </div>
+        </div>
+        <div id="canvas"></div>
+        <script>
+            var PREFIX = "state_distribution"
+            var SIZE = { "width": 800, "height": 800 }
+            var OPTIONS = [ "types"]
+            var SELECTED = {
+                "radios": {
+                    "type": "2"
+                }
+            }
+            var LABELS = {
+                "meta": {
+                    "R": "random",
+                    "S": "simple",
+                    "M": "medium",
+                    "C": "complex"
+                },
+                "sig": {
+                    "R": "random",
+                    "S": "simple",
+                    "M": "medium",
+                    "C": "complex"
+                },
+            }
+
+            initialize()
+
+            var Y_AXIS = {
+                "1": [0, 0.4],
+                "2": [0, 3],
+                "3": [0, 0.6],
+                "4": [0, 1],
+                "5": [0, 0.2],
+                "6": [0, 1],
+            }
+
+            function PROCESSOR() {
+                let selected = {
+                    "meta": ["R", "S", "M", "C"],
+                    "sig": ["R", "S", "M", "C"],
+                    "type": SELECTED.radios.type,
+                }
+
+                let name = function(arr) {
+                    return "MODULE_COMPLEXITY/MODULE_COMPLEXITY" + "_" + arr.join("_") + ".DISTRIBUTION.csv"
+                }
+
+                let layout = ["meta", "sig"]
+                let make = processMake(layout, selected, [0, 1], name)
+                let p = processGrid(layout, selected, make)
+
+                return {
+                    "selected": selected,
+                    "layout": layout,
+                    "files": p.files,
+                    "margin": { "left": p.marginLeft, "top": p.marginTop,
+                        "right": 5, "bottom": 5, "axis": AXIS_PADDING },
+                    "cols": p.nCols,
+                    "rows": p.nRows,
+                    "axis": {
+                        "x": {
+                            "scale": 30/1000.0, // hexagons => mm
+                            "bounds": [0, 0.6], // [mm]
+                            "title": "Distance from Center (mm)",
+                            "n": 3,
+                            "padding": 0.01
+                        },
+                        "y": {
+                            "bounds": Y_AXIS[selected.type],
+                            "title": "Fraction Occupancy",
+                            "n": 3,
+                        }
+                    }
+                }
+            }
+
+            function PARSER(code, S, D) {
+                let x = D.data
+                    .filter(e => e.time == "0.0")
+                    .map(e => S.axis.x.scale*Number(e.radius))
+
+                let prefix = "TYPE_" + S.selected.type + "_"
+
+                let d = D.data.filter(f => f.time.replace(".","").padStart(3,"0") == "150")
+
+                let = data = [
+                    {
+                        "*": "path",
+                        "x": x,
+                        "y": d.map(e => Number(e[prefix + "avg"])),
+                        "fill": "none",
+                        "stroke": "#555555",
+                        "width": 1
+                    },
+                    {
+                        "*": "path",
+                        "x": x,
+                        "y": d.map(e => Number(e[prefix + "avg"]) + Number(e[prefix + "std"])),
+                        "fill": "none",
+                        "stroke": "#555555",
+                        "width": 0.5,
+                        "dash": "2,2"
+                    },
+                    {
+                        "*": "path",
+                        "x": x,
+                        "y": d.map(e => Number(e[prefix + "avg"]) - Number(e[prefix + "std"])),
+                        "fill": "none",
+                        "stroke": "#555555",
+                        "width": 0.5,
+                        "dash": "2,2"
+                    },
+                    {
+                        "*": "area",
+                        "x": x,
+                        "min": d.map(e => Number(e[prefix + "min"])),
+                        "max": d.map(e => Number(e[prefix + "max"])),
+                        "fill": "#555555",
+                        "opacity": 0.2
+                    }
+                ]
+
+                return { "data": [{ "id": "X", "x": 0, "y": 0, "data": data }], "rows": 1, "cols": 1 }
+            }
+
+            function LABELLER(S, P) { return labelGrid(S, P) }
+
+            function DECORATOR(g, S, i, p) {
+                decorateTicks(g, S, i, p)
+
+                g.insert("g",":first-child").append("rect")
+                    .attr("width", S.subpanel.w/2)
+                    .attr("height", S.subpanel.h)
+                    .attr("fill", "#eee")
+                    .attr("stroke", "none")
+            }
+        </script>
+    </body>
+</html>
