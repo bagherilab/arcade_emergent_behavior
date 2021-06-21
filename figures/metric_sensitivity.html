@@ -1,0 +1,184 @@
+<!DOCTYPE html>
+<html>
+    <head>
+        <meta charset="utf-8">
+        <link rel="stylesheet" href="css/style.css" />
+        <script src="https://d3js.org/d3.v4.min.js"></script>
+        <script type="text/javascript" src="js/browser.js"></script>
+        <script type="text/javascript" src="js/functions.js"></script>
+        <script type="text/javascript" src="js/utilities.js"></script>
+    </head>
+    <body>
+        <h1>metric sensitivity</h1>
+        <div id="buttons">
+            <button id="generate">GENERATE</button>
+            <button id="save">SAVE</button>
+        </div>
+        <div id="options">
+            <div id="metrics">
+                <strong>METRIC</strong>
+                <label class="inputs"><input type="radio" name="metric" id="metric_GROWTH">growth rate</label>
+                <label class="inputs"><input type="radio" name="metric" id="metric_SYMMETRY">symmetry</label>
+                <label class="inputs"><input type="radio" name="metric" id="metric_CYCLES">cycle length</label>
+            </div>
+        </div>
+        <div id="canvas"></div>
+        <script>
+            var PREFIX = "metric_sensitivity"
+            var SIZE = { "width": 500, "height": 150 }
+            var OPTIONS = [ "metrics" ]
+            var SELECTED = {
+                "radios": {
+                    "metric": "GROWTH",
+                }
+            }
+            var LABELS = {
+                "param": {
+                    "max_height": "ct",
+                    "meta_pref": "mp",
+                    "migra_threshold": "mt",
+                },
+            }
+
+            initialize()
+
+            var Y_AXIS = {
+                "GROWTH": [-2, 2],
+                "SYMMETRY": [-0.7, 0.7],
+                "CYCLES": [-1.2, 1.2],
+            }
+
+            function PROCESSOR() {
+                let selected = {
+                    "metric": SELECTED.radios.metric,
+                    "param": ["max_height", "meta_pref", "migra_threshold"],
+                    "": [""],
+                }
+
+                let name = function(arr) {
+                    return "PARAMETER_SENSITIVITY/PARAMETER_SENSITIVITY.METRICS." + selected.metric + ".json"
+                }
+
+                let layout = ["", "param"]
+                let make = processMake(layout, selected, [], name)
+                let p = processGrid(layout, selected, make)
+                let n = 20
+
+                return {
+                    "selected": selected,
+                    "layout": layout,
+                    "files": p.files,
+                    "margin": { "left": p.marginLeft, "top": LABEL_SIZE*2, "right": 5, "bottom": 5, "axis": AXIS_EMPTY },
+                    "cols": p.nCols,
+                    "rows": p.nRows,
+                    "axis": {
+                        "x": { "bounds": [-n/2, n/2 ], "padding": 0.5 },
+                        "y": { "bounds": Y_AXIS[selected.metric] },
+                    }
+                }
+            }
+
+            function PARSER(code, S, D) {
+                let xbounds = S.axis.x.bounds
+                let ybounds = S.axis.y.bounds
+
+                let inds = linspace(xbounds[0] + 0.5, xbounds[1] - 0.5, xbounds[1] - xbounds[0])
+                inds = inds.map(e => (e < 0 ? e - 0.3 : e + 0.3))
+
+                let lower = linrange(-10,10).map(e => 100 - e*-10)
+                let upper = linrange(1,10).map(e => e*10 + 100)
+
+                let perc_names = lower.map(e => (e == 0 ? "00" : "0") + e)
+                perc_names = perc_names.concat(upper.map(e => "" + e))
+
+                let perc_vals = lower.map(e => e/100)
+                perc_vals = perc_vals.concat(upper.map(e => e/100))
+
+                let cmap = d3.scaleLinear().domain([ybounds[0], 0, ybounds[1]]).range(["#555", "#ccc", "#555"])
+
+                let d = D.data.data.filter(e => e[S.layout[1]] == S.selected[S.layout[1]][D.i[1]])
+                let tindex = D.data["_X"].indexOf(15) // use t = 15.0
+                let x0 = 1.0
+                let y0 = d.filter(e => e.perc == "100")[0]["_Y"][tindex]
+
+                // Rescale symmetry metric denominator to 5 instead of 6.
+                if (S.selected.metric == "SYMMETRY") { y0 = 1 - (6/5)*(1 - y0) }
+
+                let max = 0
+                let sensitivities = []
+
+                for (let i = 0; i < perc_names.length; i++) {
+                    let y = d.filter(e => e.perc == perc_names[i])[0]["_Y"][tindex]
+
+                    // Rescale symmetry metric denominator to 5 instead of 6.
+                    if (S.selected.metric == "SYMMETRY") { y = 1 - (6/5)*(1 - y) }
+
+                    let pdy = (y - y0)/y0
+
+                    let x = perc_vals[i]
+                    let pdx = (x - x0)/x0
+
+                    let s = pdy/pdx
+                    sensitivities.push(s)
+
+                    if (Math.abs(s) > max) { max = Math.abs(s) }
+                }
+
+                let data = sensitivities.map(function(e, i) {
+                    if (e > ybounds[1]) { console.log(e) }
+                    if (e < ybounds[0]) { console.log(e) }
+
+                    return {
+                        "*": "circle",
+                        "y": [0],
+                        "x": [inds[i]],
+                        "r": (isNaN(e) ? 1 : 4*Math.abs(e/max) + 2),
+                        "fill": (isNaN(e) ? "#000" : cmap(Math.sign(e)*Math.abs(e))),
+                        "stroke": (isNaN(e) ? "none" : (e < 0 ? "#000": "#fff"))
+                    }
+                })
+
+                return { "data": [{ "id": "X", "x": 0, "y": 0, "data": data }], "rows": 1, "cols": 1 }
+            }
+
+            function LABELLER(S, P) { return labelGrid(S, P) }
+
+            function DECORATOR(g, S, i, p) {
+                addLine(g, S.xscale(0), S.xscale(0), 0, S.subpanel.h, "#ccc", "1px")
+                    .attr("stroke-dasharray", "4,4")
+
+                if (i.reduce(function(a, b) { return a + b }) == 0) {
+                    let n = S.axis.x.bounds[1]
+                    let lower = linrange(-10,10).map(e => 100 - e*-10)
+                    let upper = linrange(1,10).map(e => e*10 + 100)
+
+                    let perc_names = lower.map(e =>  "-" + (100 - e))
+                    perc_names = perc_names.concat(upper.map(e => "+" + (e - 100)))
+
+                    S.G.append("g")
+                        .attr("transform", "translate("
+                            + (PANEL_PADDING/2 + SUBPANEL_PADDING/2) + ","
+                            + (-LABEL_SIZE) + ")")
+                        .selectAll("text")
+                            .data(perc_names).enter()
+                            .append("text")
+                                .text(d => d)
+                                .attr("y", 15)
+                                .attr("x", function(d, i) {
+                                    let ind = i - n + 0.5
+                                    ind = (ind < 0 ? ind - 0.3 : ind + 0.3)
+                                    return S.xscale(ind)
+                                })
+                                .attr("transform", function(d, i) {
+                                    let ind = i - n + 0.5
+                                    ind = (ind < 0 ? ind - 0.3 : ind + 0.3)
+                                    return "rotate(-90," + (S.xscale(ind) + (FONT_SIZE - 3)/2 - 1) + ",15)"
+                                })
+                                .attr("font-family", "Courier")
+                                .attr("fill", "#000")
+                                .attr("font-size", (FONT_SIZE - 3) + "pt")
+                }
+            }
+        </script>
+    </body>
+</html>

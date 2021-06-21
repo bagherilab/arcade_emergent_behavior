@@ -45,6 +45,12 @@ function linspace(start, end, n) {
     return bins.map(e => Number((parseFloat(e).toPrecision(12))))
 }
 
+function linrange(start, n) {
+    let r = []
+    for (let i = 0; i < n; i++) { r.push(start + i) }
+    return r
+}
+
 function contains(val, arr) {
     for (let i = 0; i < arr.length; i++) { if (arr[i] == val) { return true }}
     return false
