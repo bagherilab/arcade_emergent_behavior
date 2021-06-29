@@ -37,7 +37,7 @@ class GROWTH_CONTEXT():
             for context, suffix, exclude in contexts:
                 for pop in populations:
                     code = f"_{context}{suffix}_{pop}"
-                    func1(outfile, out, { "time": t, "context": context + suffix, "pop": pop }, extension, code, tar=tar)
+                    func1(outfile, out, { "time": t, "context": context + suffix, "pops": pop }, extension, code, tar=tar)
 
         func2(outfile, extension, out)
 
@@ -53,4 +53,4 @@ class GROWTH_CONTEXT():
                 print(f"{name} : {code}")
 
                 tar = tarfile.open(infile)
-                func(tar, timepoints, { "context": context + suffix, "pop": pop }, outfile, code)
+                func(tar, timepoints, { "context": context + suffix, "pops": pop }, outfile, code)

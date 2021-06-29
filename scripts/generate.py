@@ -39,15 +39,52 @@ def merge_concentrations(file, out, keys, extension, code, tar=None):
     out['data'].append(keys)
     out['_X'] = D['_X']
 
+def merge_fractions(file, out, keys, extension, code, tar=None):
+    """Merge cell population fractions across conditions."""
+    tar_counts = load_tar(file, ".METRICS.COUNTS")
+    tar_pops = load_tar(file, ".METRICS.POPS")
+
+    filepath_counts = f"{file}{code}.METRICS.COUNTS.json"
+    filepath_pops = f"{file}{code}.METRICS.POPS.json"
+
+    if tar_counts:
+        D0 = load_json(filepath_counts.split("/")[-1], tar=tar_counts)
+    else:
+        D0 = load_json(filepath_pops)
+
+    if tar_pops:
+        D = load_json(filepath_counts.split("/")[-1], tar=tar_pops)
+    else:
+        D = load_json(filepath_pops)
+
+    d0 = D0['mean']
+    d = D['data']
+
+    n = len(D['data'])
+    F = [np.divide(d[pop]['mean'], d0).tolist() for pop in range(n)]
+
+    keys.pop('time', None)
+    for pop in range(n):
+        out_pop = keys.copy()
+        out_pop['_Y'] = F[pop]
+        out_pop["pop"] = pop
+        out['data'].append(out_pop)
+
+    out['_X'] = D0['_X']
+
 # ------------------------------------------------------------------------------
 
 def save_metrics(file, extension, out):
     """Save merged metrics files."""
     save_json(file, out, extension)
+
 def save_concentrations(file, extension, out):
     """Save merged concentrations."""
     save_json(file, out, extension)
 
+def save_fractions(file, extension, out):
+    """Save merged fractions."""
+    save_json(file, out, extension)
 
 # DEFAULT STATES ===============================================================
 

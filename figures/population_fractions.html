@@ -1,0 +1,163 @@
+<!DOCTYPE html>
+<html>
+    <head>
+        <meta charset="utf-8">
+        <link rel="stylesheet" href="css/style.css" />
+        <script src="https://d3js.org/d3.v4.min.js"></script>
+        <script type="text/javascript" src="js/browser.js"></script>
+        <script type="text/javascript" src="js/functions.js"></script>
+        <script type="text/javascript" src="js/utilities.js"></script>
+    </head>
+    <body>
+        <h1>population fractions</h1>
+        <div id="buttons">
+            <button id="generate">GENERATE</button>
+            <button id="save">SAVE</button>
+        </div>
+        <div id="canvas"></div>
+        <script>
+            var PREFIX = "population_fractions"
+            var SIZE = { "width": 800, "height": 500 }
+            var OPTIONS = [ ]
+            var SELECTED = { }
+            var LABELS = {
+                "pops": {
+                    "X": "X",
+                    "A": "A",
+                    "B": "B",
+                    "C": "C",
+                },
+                "context": {
+                    "C": "colony",
+                    "CHX": "tissue",
+                },
+            }
+
+            initialize()
+
+            function PROCESSOR() {
+                let selected = {
+                    "context": ["C", "CHX"],
+                    "pops": ["X", "A", "B", "C"]
+                }
+
+                let layout = ["pops", "context"]
+                let name = function(arr) { return "GROWTH_CONTEXT/GROWTH_CONTEXT.FRACTIONS.json" }
+
+                let make = processMake(layout, selected, [], name)
+                let p = processGrid(layout, selected, make)
+
+                return {
+                    "selected": selected,
+                    "layout": layout,
+                    "files": p.files,
+                    "margin": { "left": p.marginLeft, "top": p.marginTop, "right": 5, "bottom": 5,
+                        "axis": AXIS_PADDING },
+                    "cols": p.nCols,
+                    "rows": p.nRows,
+                    "axis": {
+                        "x": {
+                            "bounds": [1, 15],
+                            "title": "Time (days)",
+                            "n": 3,
+                            "padding": 0.5
+                        },
+                        "y": {
+                            "bounds": [-0.5, 0.5],
+                            "title": '\u0394 Fraction of Total Cells',
+                            "n": 3,
+                            "padding": 0.05
+                        }
+                    }
+                }
+            }
+
+            function PARSER(code, S, D) {
+                let data = []
+                let d = D.data.data
+                    .filter(e => e["context"] == S.selected.context[D.i[1]])
+                    .filter(e => e["pop"] == D.i[0])
+
+                let pop_list = ["X", "A", "B", "C"]
+                let all_pop_colors = {
+                    "X":"#8a7962",
+                    "A":"#3ca87a",
+                    "B":"#cf4356",
+                    "C": "#6cabd0"
+                }
+
+                d.map(function(e) {
+                    let pops = e["pops"].split("")
+                    let this_pop = pop_list[e["pop"]]
+                    if (!contains(this_pop, pops) || pops.length == 1) { return }
+
+                    let dd = e["_Y"]
+                    let y0 = dd[2]
+                    let y0max = 1 - y0
+                    let y0min = y0
+
+                    let deltas = dd.map(function(f) {
+                        let delta = Number(f) - y0
+                        return (delta > 0 ? delta/y0max : delta/y0min)
+                    })
+
+                    let remove = findNaNs(deltas)
+                    let y = removeNaNs(deltas, remove)
+                    let x = removeNaNs(D.data["_X"], remove)
+
+                    let other_pops = pops.filter(e => e != this_pop)
+                    let num_pops = other_pops.length
+                    let pop_colors = other_pops.map(e => all_pop_colors[e])
+
+                    if (num_pops == 1) {
+                        data.push({
+                            "*": "path",
+                            "x": x,
+                            "y": y,
+                            "width": 2,
+                            "stroke": pop_colors[0]
+                        })
+                    }
+                    if (num_pops == 2) {
+                        data.push({
+                            "*": "path",
+                            "x": x,
+                            "y": y,
+                            "width": 2,
+                            "stroke": pop_colors[0],
+                            "dash": "4,4"
+                        })
+
+                        data.push({
+                            "*": "path",
+                            "x": x,
+                            "y": y,
+                            "width": 2,
+                            "stroke": pop_colors[1],
+                            "dash": "4,4",
+                            "offset": 4
+                        })
+                    }
+                    if (num_pops == 3) {
+                        data.push({
+                            "*": "path",
+                            "x": x,
+                            "y": y,
+                            "width": 2,
+                            "stroke": "#000"
+                        })
+                    }
+                })
+
+                return { "data": [{ "id": "X", "x": 0, "y": 0, "data": data }], "rows": 1, "cols": 1 }
+            }
+
+            function LABELLER(S, P) { return labelGrid(S, P) }
+
+            function DECORATOR(g, S, i, p) {
+                addLine(g, 0, S.subpanel.dw, S.yscale(0), S.yscale(0), "#ccc", "1px")
+                decorateTicks(g, S, i, p)
+            }
+        </script>
+    </body>
+</html>

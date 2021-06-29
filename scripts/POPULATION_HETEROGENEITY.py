@@ -59,7 +59,7 @@ class POPULATION_HETEROGENEITY():
                                 continue
 
                             code = f"_{context}{suffix}_{pop}_{cancer_het}_{tissue_het}"
-                            func1(outfile, out, { "time": t, "context": context + suffix, "pop": pop, "chet": cancer_het, "thet": tissue_het }, extension, code, tar=tar)
+                            func1(outfile, out, { "time": t, "context": context + suffix, "pops": pop, "chet": cancer_het, "thet": tissue_het }, extension, code, tar=tar)
 
         func2(outfile, extension, out)
 
@@ -86,4 +86,4 @@ class POPULATION_HETEROGENEITY():
                         print(f"{name} : {code}")
 
                         tar = tarfile.open(infile)
-                        func(tar, timepoints, { "context": context + suffix, "pop": pop, "chet": cancer_het, "thet": tissue_het }, outfile, code)
+                        func(tar, timepoints, { "context": context + suffix, "pops": pop, "chet": cancer_het, "thet": tissue_het }, outfile, code)
