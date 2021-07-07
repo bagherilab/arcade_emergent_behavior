@@ -232,6 +232,29 @@ function compileDoubleFiles(layout, selected, make) {
     return files
 }
 
+function compileTripleFiles(layout, selected, make) {
+    let files = []
+    let len = layout.map(d => selected[d].length)
+    let A = selected[layout[0]]
+    let B = selected[layout[1]]
+    let C = selected[layout[2]]
+
+    for (let a = 0; a < len[0]; a++) {
+        for (let b = 0; b < len[1]; b++) {
+            for (let c = 0; c < len[2]; c++) {
+                let abc = make(A[a], B[b], C[c], a, b, c)
+                files.push({
+                    "file": abc.file,
+                    "x": abc.x,
+                    "y": abc.y,
+                    "i": [a, b, c] })
+            }
+        }
+    }
+
+    return files
+}
+
 // -----------------------------------------------------------------------------
 
 function addBorder(g, width, height, stroke) {

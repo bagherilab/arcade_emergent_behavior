@@ -1,0 +1,147 @@
+<!DOCTYPE html>
+<html>
+    <head>
+        <meta charset="utf-8">
+        <link rel="stylesheet" href="css/style.css" />
+        <script src="https://d3js.org/d3.v4.min.js"></script>
+        <script type="text/javascript" src="js/browser.js"></script>
+        <script type="text/javascript" src="js/functions.js"></script>
+        <script type="text/javascript" src="js/utilities.js"></script>
+    </head>
+    <body>
+        <h1>modified distribution</h1>
+        <div id="buttons">
+            <button id="generate">GENERATE</button>
+            <button id="save">SAVE</button>
+        </div>
+        <div id="canvas"></div>
+        <script>
+            var PREFIX = "modified_distribution"
+            var SIZE = { "width": 400, "height": 600 }
+            var OPTIONS = [ ]
+            var SELECTED = { }
+            var LABELS = {
+                "param": {
+                    "max_height": "crowding tolerance",
+                    "meta_pref": "metabolic preference",
+                    "migra_threshold": "migratory threshold",
+                },
+                "pop": {
+                    "0": "Basal Population",
+                    "1": "Modified Population"
+                }
+            }
+
+            initialize()
+
+            function PROCESSOR() {
+                let selected = {
+                    "param": ["max_height", "meta_pref", "migra_threshold"],
+                    "perc": [
+                        "050", "060", "070", "080", "090", "100",
+                        "110", "120", "130", "140", "150"
+                    ],
+                    "pop": ["0", "1"]
+                }
+
+                let file = function(A, B, C) {
+                    return "CELL_COMPETITION/CELL_COMPETITION_" + B + "_" + C + "_050_050.DISTRIBUTION.csv"
+                }
+
+                let make = function(A, B, C, iA, iB, iC) {
+                    return { "x": iA, "y": iB, "file": file(A, B, C) }
+                }
+
+                let layout = ["pop", "param", "perc"]
+                let files = compileTripleFiles(layout, selected, make)
+
+                return {
+                    "selected": selected,
+                    "layout": layout,
+                    "files": files,
+                    "margin": { "left": LABEL_SIZE, "top": LABEL_SIZE, "right": 5, "bottom": 5,
+                        "axis": AXIS_PADDING },
+                    "cols": selected[layout[0]].length,
+                    "rows": selected[layout[1]].length,
+                    "axis": {
+                        "x": {
+                            "scale": 30/1000.0, // hexagons => mm
+                            "bounds": [0, 0.6], // [mm]
+                            "title": "Distance from Center (mm)",
+                            "n": 3,
+                            "padding": 0.01
+                        },
+                        "y": {
+                            "bounds": [0, 2],
+                            "title": "Fraction Occupancy",
+                            "n": 5,
+                            "padding": 0.05
+                        },
+                    }
+                }
+            }
+
+            function PARSER(code, S, D) {
+                let time = ["040", "090", "140"]
+                let dashes = [null, "1,1", "4,2"]
+                let data = []
+
+                let x = D.data
+                    .filter(e => e.time == 0)
+                    .map(e => Number(e.radius)*S.axis.x.scale)
+
+                for (let i = 0; i < time.length; i++) {
+                    let d = D.data.filter(f => f.time.replace(".","").padStart(3,"0") == time[i])
+                    let y = d.map(f => Number(f["POP_" + D.i[0] + "_avg"]))
+                    let color = COLORS["param"](S.selected.perc[D.i[2]])
+
+                    data.push({
+                        "*": "path",
+                        "x": x,
+                        "y": y,
+                        "stroke": color,
+                        "width": 1,
+                        "dash": dashes[i]
+                    })
+                }
+
+                return { "data": [{ "id": "X", "x": 0, "y": 0, "data": data }], "rows": 1, "cols": 1 }
+            }
+
+            function LABELLER(S, P) { return labelTwo(S, P) }
+
+            function DECORATOR(g, S, i, p) {
+                if (i[2] == 0) {
+                    addBorder(g, S.subpanel.w, S.subpanel.h, "#ccc")
+                    addLine(g, 0, S.subpanel.w, S.yscale(1), S.yscale(1), "#ccc", "1px")
+
+                    // Create and align groups for ticks.
+                    let dx = PANEL_PADDING/2 + SUBPANEL_PADDING/2 + S.margin.axis.left
+                        + S.panel.dw*i[0]
+                    let dy = PANEL_PADDING/2 + SUBPANEL_PADDING/2 + S.margin.axis.top
+                        + S.panel.dh*i[1]
+
+                    // Create group to hold ticks.
+                    let G = S.G.append("g")
+                        .attr("id", "ticks")
+                        .attr("transform", "translate(" + dx + "," + dy + ")")
+
+                    let A = S.axis
+
+                    // Create ticks.
+                    let ticks = []
+                    ticks.push(makeHorzTicks(S, 0, S.subpanel.h, A.x))
+                    ticks.push(makeVertTicks(S, 0, 0, A.y))
+
+                    // Create axis labels.
+                    let labels = []
+                    labels.push(makeHorzLabel(S.subpanel.w, 0, alignHorzText(S), A.x.title, "none"))
+                    labels.push(makeVertLabel(S.subpanel.h, alignVertText(S), 0, A.y.title, "none"))
+
+                    addTicks(G, ticks)
+                    addLabels(G, labels)
+                }
+            }
+        </script>
+    </body>
+</html>
