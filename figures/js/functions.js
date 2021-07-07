@@ -262,6 +262,36 @@ function plotCircle(g, S) {
             .attr("opacity", d => d.opacity)
 }
 
+function plotRect(g, S) {
+    g.selectAll("rect")
+        .data(function(d) {
+            let xscale = (d.scale ? S.xscale[d.scale.x] : S.xscale)
+            let yscale = (d.scale ? S.yscale[d.scale.y] : S.yscale)
+
+            return d.x.map(function(e, i) {
+                return {
+                    "x": xscale(e) + (d.dx ? d.dx[i] : 0),
+                    "y": yscale(d.y[i]) + (d.dy ? d.dy[i] : 0),
+                    "w": xscale(d.width[i]) - xscale(0) + (d.dw ? d.dw[i] : 0),
+                    "h": yscale(0) - yscale(d.height[i]) + (d.dh ? d.dh[i] : 0),
+                    "fill": (d.fill ? (Array.isArray(d.fill) ? d.fill[i] : d.fill) : "#555"),
+                    "stroke": (d.stroke ? (Array.isArray(d.stroke) ? d.stroke[i] : d.stroke) : null),
+                    "opacity": (d.opacity ? (Array.isArray(d.opacity) ? d.opacity[i] : d.opacity) : null),
+                    "dash": (d.dash ? (Array.isArray(d.dash) ? d.dash[i] : d.dash) : null),
+                }
+            })
+        })
+        .enter().append("rect")
+            .attr("x", d => d.x)
+            .attr("y", d => d.y)
+            .attr("width", d => d.w)
+            .attr("height", d => d.h)
+            .attr("fill", d => d.fill)
+            .attr("stroke", d => d.stroke)
+            .attr("opacity", d => d.opacity)
+            .attr("stroke-dasharray", d => d.dash)
+}
+
 // LABELERS ====================================================================
 
 function labelGrid(S, P) {

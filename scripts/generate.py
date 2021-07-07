@@ -108,6 +108,20 @@ def merge_fractions(file, out, keys, extension, code, tar=None):
 
     out['_X'] = D0['_X']
 
+def merge_maps(file, out, keys, extension, code, tar=None):
+    """Merge metrics for heatmap."""
+    filepath = f"{file}{code}{extension}.json"
+
+    if tar:
+        D = load_json(filepath.split("/")[-1], tar=tar)
+    else:
+        D = load_json(filepath)
+
+    index = D["_X"].index(keys["time"])
+    data = list(keys.values()) + [D["mean"][index]]
+    out['data'].append(data)
+    out['header'] = list(keys.keys()) + ["metric"]
+
 # ------------------------------------------------------------------------------
 
 def save_metrics(file, extension, out):
@@ -125,6 +139,11 @@ def save_concentrations(file, extension, out):
 def save_fractions(file, extension, out):
     """Save merged fractions."""
     save_json(file, out, extension)
+
+def save_maps(file, extension, out):
+    """Save merged metrics map."""
+    header = ",".join(out["header"]) + "\n"
+    save_csv(file, header, list(zip(*out["data"])), extension.replace("METRICS", "MAPS"))
 
 # DEFAULT STATES ===============================================================
 

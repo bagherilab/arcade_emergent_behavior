@@ -1,0 +1,209 @@
+<!DOCTYPE html>
+<html>
+    <head>
+        <meta charset="utf-8">
+        <link rel="stylesheet" href="css/style.css" />
+        <script src="https://d3js.org/d3.v4.min.js"></script>
+        <script type="text/javascript" src="js/browser.js"></script>
+        <script type="text/javascript" src="js/functions.js"></script>
+        <script type="text/javascript" src="js/utilities.js"></script>
+    </head>
+    <body>
+        <h1>competition maps</h1>
+        <div id="buttons">
+            <button id="generate">GENERATE</button>
+            <button id="save">SAVE</button>
+        </div>
+        <div id="options">
+            <div id="metrics">
+                <strong>METRIC</strong>
+                <label class="inputs"><input type="radio" name="metric" id="metric_GROWTH">growth rate</label>
+                <label class="inputs"><input type="radio" name="metric" id="metric_SYMMETRY">symmetry</label>
+                <label class="inputs"><input type="radio" name="metric" id="metric_CYCLES">cycle length</label>
+            </div>
+        </div>
+        <div id="canvas"></div>
+        <script>
+            var PREFIX = "competition_maps"
+            var SIZE = { "width": 829, "height": 276 }
+            var OPTIONS = [ "metrics" ]
+            var SELECTED = {
+                "radios": {
+                    "metric": "GROWTH",
+                }
+            }
+            var LABELS = {
+                "param": {
+                    "max_height": "crowding tolerance",
+                    "meta_pref": "metabolic preference",
+                    "migra_threshold": "migratory threshold",
+                },
+                "perc": {
+                    "050": "-50", "060": "-40", "070": "-30", "080": "-20","090": "-10",
+                    "100": "0", "110": "+10", "120": "+20", "130": "+30", "140": "+40", "150": "+50",
+                },
+                "init": {
+                    "000-100": "100", "010-090": "90", "020-080": "80", "030-070": "70", "040-060": "60",
+                    "050-050": "50", "060-040": "40", "070-030": "30", "080-020": "20", "090-010": "10", "100-000": "0"
+                },
+            }
+
+            initialize()
+
+            function PROCESSOR() {
+                let selected = {
+                    "metric": SELECTED.radios.metric,
+                    "param": ["max_height", "meta_pref", "migra_threshold"],
+                    "perc": [
+                        "050", "060", "070", "080", "090",
+                        "110", "120", "130", "140", "150"
+                    ],
+                    "init": [
+                        "100-000", "090-010", "080-020", "070-030", "060-040",
+                        "050-050", "040-060", "030-070", "020-080", "010-090", "000-100"]
+                }
+
+                let name = function(arr) {
+                    return "CELL_COMPETITION/CELL_COMPETITION.MAPS." + selected.metric + ".csv"
+                }
+
+                let layout = ["param"]
+                let make = processMake(layout, selected, [], name)
+                let p = processGrid(layout, selected, make)
+
+                return {
+                    "selected": selected,
+                    "layout": layout,
+                    "files": p.files,
+                    "margin": { "left": p.marginLeft, "top": p.marginTop,
+                        "right": 5, "bottom": 5, "axis": MAP_PADDING },
+                    "cols": p.nCols,
+                    "rows": p.nRows,
+                    "axis": {
+                        "x": { "bounds": [0, selected["init"].length] },
+                        "y": { "bounds": [0, selected["perc"].length] },
+                        "c": [-0.3, 0.3]
+                    }
+                }
+            }
+
+            function PARSER(code, S, D) {
+                let row = "init"
+                let col = "perc"
+                let rows = S.selected[row]
+                let cols = S.selected[col]
+
+                let fields = ["param", "init"]
+                let param = S.selected.param[D.i[0]]
+                let d = D.data
+                    .filter(e => e.time == 14)
+                    .filter(e => e.param == param)
+
+                let bounds = S.axis.c
+                let cmap = d3.scaleLinear().range(COLORMAPS['div'])
+                    .domain(linspace(bounds[0], bounds[1], COLORMAPS['div'].length));
+                let negcmap = d3.scaleLinear().range(["#002", COLORMAPS['div'][0]])
+                    .domain([bounds[0]*10, bounds[0]]);
+                let poscmap = d3.scaleLinear().range(["#200", COLORMAPS['div'][COLORMAPS['div'].length - 1]])
+                    .domain([bounds[0], bounds[1]*10]);
+
+                let data = [
+                    {
+                        "*": "rect",
+                        "x": d.map(e => rows.indexOf(e[row])),
+                        "y": d.map(e => cols.indexOf(e[col]) + 1),
+                        "height": d.map(e => 1),
+                        "width": d.map(e => 1),
+                        "dh": d.map(e => -0.5),
+                        "dw": d.map(e => -0.5),
+                        "fill": d.map(function(e) {
+                            let d0 = D.data
+                                .filter(e1 => fields.every(e2 => e1[e2] == e[e2]))
+                                .filter(e1 => e1["perc"] == "100")
+                            let m0 = Number(d0[0].metric)
+                            let m = Number(e.metric)
+
+                            // Rescale symmetry metric denominator to 5 instead of 6.
+                            if (S.selected.metric == "SYMMETRY") {
+                                m0 = 1 - (6/5)*(1 - m0)
+                                m = 1 - (6/5)*(1 - m)
+                            }
+
+                            let log2 = Math.log2(m/m0)
+
+                            if (param != "max_height") { log2 = log2*10 }
+
+                            if (Math.abs(log2) > Math.abs(bounds[1])) {
+                                if (Math.abs(log2) > Math.abs(bounds[1])*10) { console.log(log2) }
+                                if (log2 < 0) { return negcmap(log2) }
+                                else { return poscmap(log2) }
+                            }
+                            else { return cmap(log2) }
+                        })
+                    }
+                ]
+
+                return { "data": [{ "id": "X", "x": 0, "y": 0, "data": data }], "rows": 1, "cols": 1 }
+            }
+
+            function LABELLER(S, P) { return labelGrid(S, P) }
+
+            function DECORATOR(g, S, i, p) {
+                let rows = S.selected["init"]
+                let cols = S.selected["perc"]
+
+                let tx = PANEL_PADDING/2 + SUBPANEL_PADDING/2 + MAP_PADDING.left
+                let ty = PANEL_PADDING/2 + SUBPANEL_PADDING/2
+
+                S.G.append("g")
+                    .attr("transform", "translate("
+                        + ((i.length == 0 ? 0 : i.length < 3 ? S.panel.dw*i[0] :
+                            S.panel.dw*i[0]*S.selected[S.layout[2]].length + S.panel.dw*i[2]) + tx) + ","
+                        + (ty + S.subpanel.h + (i.length > 1 ? S.panel.dh*i[1] : 0)) + ")")
+                    .selectAll("text")
+                        .data(rows).enter()
+                        .append("text")
+                            .text(d => LABELS["init"][d])
+                            .attr("y", 2)
+                            .attr("x", (d, i) => S.xscale(i + 0.5))
+                            .attr("font-family", "Courier")
+                            .attr("fill", "#000")
+                            .attr("text-anchor", "end")
+                            .attr("font-size", (FONT_SIZE - 2) + "pt")
+                            .attr("transform", (d, i) => "rotate(-90," + (S.xscale(i + 0.5) + FONT_SIZE/2 - 2) + ",2)")
+
+                S.G.append("g")
+                    .attr("transform", "translate("
+                        + ((i.length == 0 ? 0 : i.length < 3 ? S.panel.dw*i[0] :
+                            S.panel.dw*i[0]*S.selected[S.layout[2]].length + S.panel.dw*i[2]) + tx - 2*FONT_SIZE - 4) + ","
+                        + (ty + (i.length > 1 ? S.panel.dh*i[1] : 0)) + ")")
+                    .selectAll("text")
+                        .data(cols).enter()
+                        .append("text")
+                            .text(d => LABELS["perc"][d])
+                            .attr("x", FONT_SIZE)
+                            .attr("y", (d, i) => S.yscale(i + 0.5) + FONT_SIZE/2 - 1)
+                            .attr("font-family", "Courier")
+                            .attr("fill", "#000")
+                            .attr("text-anchor", "middle")
+                            .attr("font-size", (FONT_SIZE - 2) + "pt")
+
+                // Create and align groups for ticks.
+                let dx = alignHorzAxis(S, i)
+                let dy = alignVertAxis(S, i)
+
+                // Create group to hold ticks.
+                let G = S.G.append("g")
+                    .attr("id", "ticks")
+                    .attr("transform", "translate(" + dx + "," + dy + ")")
+
+                // Create axis labels.
+                let labels = []
+                labels.push(makeHorzLabel(S.subpanel.w, 0, alignHorzText(S), "Initial % Modified", "none"))
+                labels.push(makeVertLabel(S.subpanel.h, alignVertText(S), 0, "% Change in Parameter", "none"))
+
+                addLabels(G, labels)
+            }
+        </script>
+    </body>
+</html>

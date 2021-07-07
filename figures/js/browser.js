@@ -28,6 +28,13 @@ var AXIS_PADDING = {
     "right": 0
 }
 
+var MAP_PADDING = {
+    "bottom": LABEL_SIZE + 5 + 2*FONT_SIZE + 4,
+    "left": LABEL_SIZE + 5 + 2*FONT_SIZE + 4,
+    "top": 0,
+    "right": 0
+}
+
 var EXP = function(e) { return '<tspan baseline-shift="super" font-size="70%">' + e + '</tspan>' }
 
 var COLORMAPS = {
