@@ -444,3 +444,52 @@ def make_module_concentrations(file, out):
                     full_out.append(module_out)
 
         save_json(out, full_out, f".CONCENTRATIONS.{ext}")
+
+# COMPETITION POPULATIONS ======================================================
+
+def make_competition_populations(D, R, H, T, N, C, POPS, TYPES, outfile, code, exclude=[-1], timepoints=[], seeds=[]):
+    """Extract cell populations for each position."""
+    d = np.take(D["agents"], timepoints, axis=1)
+    d = np.take(d, seeds, axis=0)
+    TT = [T[i] for i in timepoints]
+
+    inds = [[get_inds(d, j, i, H, exclude)
+        for j in range(0, len(seeds))]
+        for i in range(0, len(TT))]
+
+    _pops = ",".join(["POP_" + str(p) for p in POPS])
+    _types = ",".join(["TYPE_" + str(t) for t in TYPES])
+
+    xy, offx, offy, L, W = convert(C, R)
+
+    for i, t in enumerate(TT):
+        for j, n in enumerate(seeds):
+            ind = [inds[i][j]]
+            portions, points, types, pops = get_state_fractions(d[j,i,:,:,:], H, C, ind[0])
+
+            out = []
+            for z, portion, point, typ, pop in zip(range(1 - H, H), portions, points, types, pops):
+                out = out + [list(i) + [z, a, b, c, d]
+                    for i, poi, por, ty, po in zip(zip(*xy), point, portion, typ, pop) if len(por) > 0
+                    for j, a, b, c, d in zip([i] * len(poi), poi, por, ty, po)]
+
+
+            header = "x,y,z,i,n,TYPES,POPS\n"
+            save_csv(f"{outfile}{code}", header, list(zip(*out)), f".POSITIONS.{format_time(t)}")
+
+def merge_competition_populations(file, out, keys, extension, code, tar=None):
+    """Merge cell populations files across conditions."""
+    filepath = f"{file}{code}{extension}.{format_time(keys['time'])}.csv"
+
+    if tar:
+        D = load_csv(filepath.split("/")[-1], tar=tar)
+    else:
+        D = load_csv(filepath)
+
+    d = [[keys['param'], keys['perc'], keys['init'], keys['time']] + e for e in D[1:]]
+    out['data'] = out['data'] + d
+    out['header'] = ["param", "perc", "init", "time"] + D[0]
+
+def save_competition_populations(file, extension, out):
+    """Save merged cell populations file."""
+    save_csv(file, ','.join(out['header']) + "\n", zip(*out['data']), extension)

@@ -1,0 +1,142 @@
+<!DOCTYPE html>
+<html>
+    <head>
+        <meta charset="utf-8">
+        <link rel="stylesheet" href="css/style.css" />
+        <script src="https://d3js.org/d3.v4.min.js"></script>
+        <script type="text/javascript" src="js/browser.js"></script>
+        <script type="text/javascript" src="js/functions.js"></script>
+        <script type="text/javascript" src="js/utilities.js"></script>
+    </head>
+    <body>
+        <h1>competition populations</h1>
+        <div id="buttons">
+            <button id="generate">GENERATE</button>
+            <button id="save">SAVE</button>
+        </div>
+        <div id="canvas"></div>
+        <script>
+            var PREFIX = "competition_populations"
+            var SIZE = { "width": 837, "height": 245 }
+            var OPTIONS = [ ]
+            var SELECTED = { }
+            var LABELS = {
+                "param": {
+                    "max_height": "ct",
+                    "meta_pref": "mp",
+                    "migra_threshold": "mt",
+                },
+                "perc": {
+                    "050": "-50", "060": "-40", "070": "-30", "080": "-20","090": "-10", "100": "0",
+                    "110": "+10", "120": "+20", "130": "+30", "140": "+40", "150": "+50",
+                },
+            }
+
+            initialize()
+
+            function PROCESSOR() {
+                let selected = {
+                    "param": ["max_height", "meta_pref", "migra_threshold"],
+                    "perc": [
+                        "050", "060", "070", "080", "090", "100",
+                        "110", "120", "130", "140", "150",
+                    ],
+                }
+
+                let name = function(arr) {
+                    return "CELL_COMPETITION/CELL_COMPETITION.POSITIONS.csv"
+                }
+
+                let layout = ["perc", "param"]
+                let make = processMake(layout, selected, [1, 0], name)
+                let p = processGrid(layout, selected, make)
+
+                return {
+                    "selected": selected,
+                    "layout": layout,
+                    "files": p.files,
+                    "margin": {
+                        "left": p.marginLeft,
+                        "top": p.marginTop,
+                        "right": 5,
+                        "bottom": 5,
+                        "axis": AXIS_EMPTY
+                    },
+                    "cols": p.nCols,
+                    "rows": p.nRows,
+                    "axis": {
+                        "x": { "bounds": [0, 17] },
+                        "y": { "bounds": [0, 17] },
+                    }
+                }
+            }
+
+            function PARSER(code, S, D) {
+                let param = S.selected.param[D.i[1]]
+                let perc = S.selected.perc[D.i[0]]
+                let d = D.data
+                    .filter(e => e.z == "0")
+                    .filter(e => e.param == param)
+                    .filter(e => e.time == "140")
+                    .filter(e => e.init == "050-050")
+                    .filter(e => e.perc == perc)
+
+                let cx = d.map(e => Number(e.x)*Math.sqrt(3))
+                let cy = d.map(e => Number(e.y))
+                let links = d.map(e => (e.n == 6 ? "#hex" : "#tri_" + e.n + "_" + e.i))
+                let fill = d.map(e => (e.POPS == 0 ? "#bbb" : "#666"))
+                let stroke = d.map(e => null)
+
+                let data = [{
+                    "*": "symbol",
+                    "bounds": 17,
+                    "link": links,
+                    "cx": cx,
+                    "cy": cy,
+                    "fill": fill,
+                    "stroke": stroke
+                }]
+
+                let symbols = [
+                    {
+                        "id": "hex",
+                        "points": makeHex()
+                    }
+                ]
+
+                let indices = [1, 2, 3, 4, 5]
+                let indices_zero = [0, 1, 2, 3, 4, 5]
+                indices.map(function(n) {
+                    indices_zero.map(function(f) {
+                        symbols.push({
+                            "id": "tri_" + n + "_" + f,
+                            "points": makeTri(f, n)
+                        })
+                    })
+                })
+
+                return { "data": [{ "id": "X", "x": 0, "y": 0, "data": data,
+                    "symbols": symbols }], "rows": 1, "cols": 1 }
+            }
+
+            function LABELLER(S, P) { return labelGrid(S, P) }
+
+            function DECORATOR(g, S, i, p) {
+                addBorder(g, S.subpanel.w, S.subpanel.h, "#ccc")
+
+                if (i[1] == 0) {
+                    let diam = 17*2
+                    let scale = Math.min(S.subpanel.h/(diam + 1)/2, S.subpanel.w/(diam + 1)/2)
+                    let DEFS = S.G.append("defs")
+
+                    p.symbols.map(function(sym) {
+                        let path = sym.points.map((e, i) => (i == 0 ? "m" : "l") + " " + scale*e[0] + "," + scale*e[1])
+                        DEFS.append("path")
+                            .attr("id", sym.id)
+                            .attr("d", path.join(" ").toUpperCase())
+                    })
+                }
+            }
+        </script>
+    </body>
+</html>
