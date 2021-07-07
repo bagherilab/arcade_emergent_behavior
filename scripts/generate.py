@@ -86,10 +86,10 @@ def merge_fractions(file, out, keys, extension, code, tar=None):
     if tar_counts:
         D0 = load_json(filepath_counts.split("/")[-1], tar=tar_counts)
     else:
-        D0 = load_json(filepath_pops)
+        D0 = load_json(filepath_counts)
 
     if tar_pops:
-        D = load_json(filepath_counts.split("/")[-1], tar=tar_pops)
+        D = load_json(filepath_pops.split("/")[-1], tar=tar_pops)
     else:
         D = load_json(filepath_pops)
 

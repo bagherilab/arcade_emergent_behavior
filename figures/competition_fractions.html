@@ -1,0 +1,132 @@
+<!DOCTYPE html>
+<html>
+    <head>
+        <meta charset="utf-8">
+        <link rel="stylesheet" href="css/style.css" />
+        <script src="https://d3js.org/d3.v4.min.js"></script>
+        <script type="text/javascript" src="js/browser.js"></script>
+        <script type="text/javascript" src="js/functions.js"></script>
+        <script type="text/javascript" src="js/utilities.js"></script>
+    </head>
+    <body>
+        <h1>competition fractions</h1>
+        <div id="buttons">
+            <button id="generate">GENERATE</button>
+            <button id="save">SAVE</button>
+        </div>
+        <div id="options">
+            <div id="params">
+                <strong>PARAMETER</strong>
+                <label class="inputs"><input type="radio" name="param" id="param_MAX-HEIGHT">crowding tolerance</label>
+                <label class="inputs"><input type="radio" name="param" id="param_META-PREF">metabolic preference</label>
+                <label class="inputs"><input type="radio" name="param" id="param_MIGRA-THRESHOLD">migratory threshold</label>
+            </div>
+        </div>
+        <div id="canvas"></div>
+        <script>
+            var PREFIX = "competition_fractions"
+            var SIZE = { "width": 800, "height": 250 }
+            var OPTIONS = [ "params" ]
+            var SELECTED = {
+                "radios": {
+                    "param": "MAX-HEIGHT",
+                }
+            }
+            var LABELS = {
+                "init": {
+                    "090-010": "10 %",
+                    "070-030": "30 %",
+                    "050-050": "50 %",
+                    "030-070": "70 %",
+                    "010-090": "90 %",
+                }
+            }
+
+            initialize()
+
+            var Y_AXIS = {
+                "MAX-HEIGHT": [-0.6, 0.6],
+                "META-PREF": [-0.2, 0.2],
+                "MIGRA-THRESHOLD": [-0.4, 0.4]
+            }
+
+            function PROCESSOR() {
+                let selected = {
+                    "param": SELECTED.radios.param,
+                    "init": ["090-010", "070-030", "050-050", "030-070", "010-090"]
+                }
+
+                let layout = ["init"]
+                let name = function(arr) { return "CELL_COMPETITION/CELL_COMPETITION.FRACTIONS.json" }
+
+                let make = processMake(layout, selected, [], name)
+                let p = processGrid(layout, selected, make)
+
+                return {
+                    "selected": selected,
+                    "layout": layout,
+                    "files": p.files,
+                    "margin": { "left": p.marginLeft, "top": p.marginTop, "right": 5, "bottom": 5,
+                        "axis": AXIS_PADDING },
+                    "cols": p.nCols,
+                    "rows": p.nRows,
+                    "axis": {
+                        "x": {
+                            "bounds": [0, 14],
+                            "title": "Time (days)",
+                            "n": 3,
+                            "padding": 0.1
+                        },
+                        "y": {
+                            "bounds": Y_AXIS[selected.param],
+                            "title": '\u0394 Fraction of Total Cells',
+                            "n": 3,
+                            "padding": 0.05
+                        }
+                    }
+                }
+            }
+
+            function PARSER(code, S, D) {
+                let data = []
+                let d = D.data.data
+                    .filter(e => e["init"] == S.selected.init[D.i[0]])
+                    .filter(e => e["pop"] == 1)
+                    .filter(e => e["param"] == S.selected.param.replace("-", "_").toLowerCase())
+
+                d.map(function(e) {
+                    let dd = e["_Y"]
+                    let y0 = dd[2]
+                    let y0max = 1 - y0
+                    let y0min = y0
+
+                    let deltas = dd.map(function(f) {
+                        let delta = Number(f) - y0
+                        return (delta > 0 ? delta/y0max : delta/y0min)
+                    })
+
+                    let remove = findNaNs(deltas)
+                    let y = removeNaNs(deltas, remove)
+                    let x = removeNaNs(D.data["_X"], remove)
+
+                    data.push({
+                        "*": "path",
+                        "x": x,
+                        "y": y,
+                        "width": 2,
+                        "stroke": COLORS["param"](e["perc"]),
+                    })
+                })
+
+                return { "data": [{ "id": "X", "x": 0, "y": 0, "data": data }], "rows": 1, "cols": 1 }
+            }
+
+            function LABELLER(S, P) { return labelGrid(S, P) }
+
+            function DECORATOR(g, S, i, p) {
+                addLine(g, 0, S.subpanel.dw, S.yscale(0), S.yscale(0), "#ccc", "1px")
+                decorateTicks(g, S, i, p)
+            }
+        </script>
+    </body>
+</html>
