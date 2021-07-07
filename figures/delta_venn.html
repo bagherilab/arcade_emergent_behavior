@@ -1,0 +1,203 @@
+<!DOCTYPE html>
+<html>
+    <head>
+        <meta charset="utf-8">
+        <link rel="stylesheet" href="css/style.css" />
+        <script src="https://d3js.org/d3.v4.min.js"></script>
+        <script type="text/javascript" src="js/browser.js"></script>
+        <script type="text/javascript" src="js/functions.js"></script>
+        <script type="text/javascript" src="js/utilities.js"></script>
+    </head>
+    <body>
+        <h1>delta venn</h1>
+        <div id="buttons">
+            <button id="generate">GENERATE</button>
+            <button id="save">SAVE</button>
+        </div>
+        <div id="options">
+            <div id="metrics">
+                <strong>METRIC</strong>
+                <label class="inputs"><input type="radio" name="metric" id="metric_GROWTH">growth rate</label>
+                <label class="inputs"><input type="radio" name="metric" id="metric_SYMMETRY">symmetry</label>
+                <label class="inputs"><input type="radio" name="metric" id="metric_CYCLES">cycle length</label>
+            </div>
+        </div>
+        <div id="canvas"></div>
+        <script>
+            var PREFIX = "delta_venn"
+            var SIZE = { "width": 622, "height": 227 }
+            var OPTIONS = [ "metrics" ]
+            var SELECTED = {
+                "radios": {
+                    "metric": "GROWTH",
+                }
+            }
+            var LABELS = {
+                "time": {
+                    "5": "day 4",
+                    "8": "day 7",
+                    "15": "day 14",
+                }
+            }
+
+            initialize()
+
+            var C_AXIS = {
+                "GROWTH": {
+                    "scale": 30, // hexagon/day => um/day
+                    "bounds": [-10, 10], // mm/day
+                },
+                "SYMMETRY": {
+                    "scale": 1,
+                    "bounds": [-0.1, 0.1], // unitless
+                },
+                "CYCLES": {
+                    "scale": 1/60.0, // min => hours
+                    "bounds": [-4, 4], // hours
+                },
+            }
+
+            function PROCESSOR() {
+                let selected = {
+                    "metric": SELECTED.radios.metric,
+                    "time": ["5", "8", "15"],
+                }
+
+                let name = function(arr) {
+                    return "GROWTH_CONTEXT/GROWTH_CONTEXT.SEEDS." + selected.metric + ".json"
+                }
+
+                let layout = ["time"]
+                let make = processMake(layout, selected, [], name)
+                let p = processGrid(layout, selected, make)
+
+                return {
+                    "selected": selected,
+                    "layout": layout,
+                    "files": p.files,
+                    "margin": {
+                        "left": p.marginLeft,
+                        "top": p.marginTop,
+                        "right": 5,
+                        "bottom": 5,
+                        "axis": AXIS_EMPTY
+                    },
+                    "cols": p.nCols,
+                    "rows": p.nRows,
+                    "axis": {
+                        "x": { "bounds": [0, 8] },
+                        "y": { "bounds": [0, 8] },
+                        "c": C_AXIS[selected.metric]
+                    }
+                }
+            }
+
+            function PARSER(code, S, D) {
+                let venn_positions = {
+                    "A": [3, 6],
+                    "B" : [5, 6],
+                    "C" : [7, 4],
+                    "X" : [1, 4],
+                    "AB" : [4, 5],
+                    "AC" : [6, 3],
+                    "XA" : [2, 5],
+                    "BC" : [6, 5],
+                    "XB" : [2, 3],
+                    "XC" : [4, 1],
+                    "ABC" : [5, 4],
+                    "XAB" : [3, 4],
+                    "XBC" : [3, 2],
+                    "XAC" : [5, 2],
+                    "XABC" : [4, 3]
+                }
+
+                let caxis = S.axis.c
+                let time = S.selected.time[D.i[0]]
+                let cscale = d3.scaleLinear().range(["#555", "#ccc", "#555"])
+                    .domain(linspace(caxis.bounds[0], caxis.bounds[1], 3))
+
+                let d = D.data.data.filter(e => e["time"] == time)
+                let data = []
+
+                for (let pops in venn_positions) {
+                    let dA = d.filter(e => e.pops == pops).filter(e => e.context == "C")
+                    let dB = d.filter(e => e.pops == pops).filter(e => e.context == "CHX")
+
+                    let vA = dA[0]["_"]
+                    let vB = dB[0]["_"]
+
+                    // Rescale symmetry metric denominator to 5 instead of 6.
+                    if (S.selected.metric == "SYMMETRY") {
+                        vA = vA.map(e => 1 - (6/5)*(1 - e))
+                        vB = vB.map(e => 1 - (6/5)*(1 - e))
+                    }
+
+                    let deltas = vA.map((a, j) => (a - vB[j]))
+
+                    let v = deltas.reduce((a, b) => a + b)/deltas.length*caxis.scale
+                    let position = venn_positions[pops]
+                    let x = position[0]
+                    let y = position[1]
+
+                    if (v < caxis.bounds[0]) { console.log(v) }
+                    if (v > caxis.bounds[1]) { console.log(v) }
+
+                    data.push({
+                        "*": "symbol",
+                        "scale": true,
+                        "link": ["#diamond"],
+                        "cx": [x],
+                        "cy": [y],
+                        "fill": [(isNaN(v) || v == 0 ? "url(#stripe)" : cscale(v))]
+                    })
+
+                    if (v < 0) {
+                        data.push({
+                            "*": "symbol",
+                            "scale": true,
+                            "link": ["#border"],
+                            "cx": [x],
+                            "cy": [y],
+                            "fill": [(isNaN(v) ? "url(#stripe)" : cscale(v))]
+                        })
+                    }
+                }
+
+                return { "data": [{ "id": "X", "x": 0, "y": 0, "data": data }], "rows": 1, "cols": 1 }
+            }
+
+            function LABELLER(S, P) { return labelGrid(S, P) }
+
+            function DECORATOR(g, S, i, p) {
+                addBorder(g, S.subpanel.w, S.subpanel.h, "#ccc")
+
+                if (i[0] == 0) {
+                    let xscale = S.xscale
+                    let yscale = S.yscale
+                    let defs = S.G.append("defs")
+
+                    let diamond = [
+                        [-1, 8],
+                        [0, 7],
+                        [1, 8],
+                        [0, 9]
+                    ]
+
+                    let path = diamond.map((e, i) => (i == 0 ? "m" : "l")
+                        + " " + xscale(e[0]) + "," + yscale(e[1]) )
+
+                    defs.append("path")
+                        .attr("id", "diamond")
+                        .attr("d", path.join(" ").toUpperCase() + " Z")
+
+                    defs.append("path")
+                        .attr("id", "border")
+                        .attr("d", path.join(" ").toUpperCase() + " Z")
+                        .attr("stroke", "#000")
+                        .attr("fill", "none")
+                        .attr("stroke-width", 0.5)
+                }
+            }
+        </script>
+    </body>
+</html>

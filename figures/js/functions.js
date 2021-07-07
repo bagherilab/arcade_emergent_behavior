@@ -199,20 +199,33 @@ function plotViolin(g, S) {
 function plotSymbol(g, S) {
     g.selectAll("use")
         .data(function(d) {
-            if (d.bounds) { var diam = d.bounds*2 }
-            else { var diam = S.axis.x.bounds[1]*2 }
+            if (d.scale) {
+                return d.cx.map(function(e, i) {
+                    return {
+                        "link": d.link[i],
+                        "cx": S.xscale(e),
+                        "cy": S.yscale(d.cy[i]),
+                        "fill": d.fill[i],
+                        "stroke": (d.stroke ? d.stroke[i] : "none"),
+                        "width": (d.width ? d.width[i] : "1px"),
+                    }
+                })
+            } else {
+                if (d.bounds) { var diam = d.bounds*2 }
+                else { var diam = S.axis.x.bounds[1]*2 }
 
-            let scale = Math.min(S.subpanel.h/(diam + 1)/2, S.subpanel.w/(diam + 1)/2)
-            return d.cx.map(function(e, i) {
-                return {
-                    "link": d.link[i],
-                    "cx": (S.subpanel.w/2 + scale*e),
-                    "cy": (S.subpanel.h/2 + scale*d.cy[i]),
-                    "fill": d.fill[i],
-                    "stroke": d.stroke[i],
-                    "width": (d.width ? d.width[i] : "1px")
-                }
-            })
+                let scale = Math.min(S.subpanel.h/(diam + 1)/2, S.subpanel.w/(diam + 1)/2)
+                return d.cx.map(function(e, i) {
+                    return {
+                        "link": d.link[i],
+                        "cx": (S.subpanel.w/2 + scale*e),
+                        "cy": (S.subpanel.h/2 + scale*d.cy[i]),
+                        "fill": d.fill[i],
+                        "stroke": d.stroke[i],
+                        "width": (d.width ? d.width[i] : "1px")
+                    }
+                })
+            }
         })
         .enter().append("use")
         .attr("transform", d => "translate(" + d.cx + "," + d.cy + ")")
