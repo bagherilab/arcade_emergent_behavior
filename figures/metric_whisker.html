@@ -1,0 +1,289 @@
+<!DOCTYPE html>
+<html>
+    <head>
+        <meta charset="utf-8">
+        <link rel="stylesheet" href="css/style.css" />
+        <script src="https://d3js.org/d3.v4.min.js"></script>
+        <script type="text/javascript" src="js/browser.js"></script>
+        <script type="text/javascript" src="js/functions.js"></script>
+        <script type="text/javascript" src="js/utilities.js"></script>
+    </head>
+    <body>
+        <h1>metric whisker</h1>
+        <div id="buttons">
+            <button id="generate">GENERATE</button>
+            <button id="save">SAVE</button>
+        </div>
+        <div id="options">
+            <div id="metrics">
+                <strong>METRIC</strong>
+                <label class="inputs"><input type="radio" name="metric" id="metric_GROWTH">growth rate</label>
+                <label class="inputs"><input type="radio" name="metric" id="metric_SYMMETRY">symmetry</label>
+                <label class="inputs"><input type="radio" name="metric" id="metric_CYCLES">cycle length</label>
+            </div>
+            <div id="contexts">
+                <strong>CONTEXT</strong>
+                <label class="inputs"><input type="radio" name="context" id="context_C">colony</label>
+                <label class="inputs"><input type="radio" name="context" id="context_CHX">tissue</label>
+            </div>
+        </div>
+        <div id="canvas"></div>
+        <script>
+            var PREFIX = "metric_whisker"
+            var SIZE = { "width": 300, "height": 300 }
+            var OPTIONS = [ "metrics", "contexts" ]
+            var SELECTED = {
+                "radios": {
+                    "metric": "GROWTH",
+                    "context": "C"
+                }
+            }
+            var LABELS = { }
+
+            initialize()
+
+            var Y_AXIS = {
+                "GROWTH": {
+                    "scale": 30, // hexagon/day => um/day
+                    "bounds": [44, 52], // mm/day
+                    "title": 'Growth Rate (\u03BCm/day)',
+                    "n": 3,
+                    "padding": 0.1
+                },
+                "SYMMETRY": {
+                    "scale": 1,
+                    "bounds": [0.80, 0.92], // unitless
+                    "title": 'Symmetry',
+                    "n": 3,
+                    "padding": 0.01
+                },
+                "CYCLES": {
+                    "scale": 1/60.0, // min => hours
+                    "bounds": [16, 24], // hours
+                    "title": 'Average Cell Cycle Length (hours)',
+                    "n": 3,
+                    "padding": 0.5
+                },
+            }
+
+            function PROCESSOR() {
+                let selected = {
+                    "metric": SELECTED.radios.metric,
+                    "context": SELECTED.radios.context,
+                    "pops": ["X", "A", "B", "C",
+                        "XA", "XB", "XC", "AB", "AC", "BC",
+                        "XAB", "XAC", "XBC", "ABC", "XABC"],
+                }
+
+                let axis_padding = AXIS_PADDING
+                axis_padding['bottom'] = 30
+
+                return {
+                    "selected": selected,
+                    "layout": [],
+                    "files": [ { "x": 0, "y": 0, "i": [0],
+                        "file": "GROWTH_CONTEXT/GROWTH_CONTEXT.METRICS." + selected.metric + ".json" } ],
+                    "margin": { "left": 5, "top": 5, "right": 5, "bottom": 5,
+                        "axis": axis_padding },
+                    "cols": 1,
+                    "rows": 1,
+                    "axis": {
+                        "x": { "bounds": [-0.5, selected.pops.length - 0.5] },
+                        "y": Y_AXIS[selected.metric]
+                    }
+                }
+            }
+
+            function PARSER(code, S, D) {
+                let A = S.axis
+                let context = S.selected.context
+                let metric = S.selected.metric
+
+                let pop_list = ["X", "A", "B", "C"]
+                let pop_colors = {
+                    "X":"#8a7962",
+                    "A":"#3ca87a",
+                    "B":"#cf4356",
+                    "C": "#6cabd0"
+                }
+
+                let data = []
+                let d = D.data.data
+                let time = D.data._X.indexOf(15)
+
+                let reflines = [
+                    "X-C", "A-C", "B-C", "C-C",
+                    "X-CHX", "A-CHX", "B-CHX", "C-CHX"
+                ]
+
+                reflines.map(function(e) {
+                    let selects = e.split("-")
+                    let dashes = { "C": null, "CHX": "3,2" }
+                    let filtered = d.filter(f => f.pops == selects[0] && f.context == selects[1])
+                    let value = filtered[0]["_Y"][time]*A.y.scale
+
+                    // Rescale symmetry metric denominator to 5 instead of 6.
+                    if (metric == "SYMMETRY") { value = 1 - (6/5)*(1 - value) }
+
+                    data.push({
+                        "*": "path",
+                        "x": [A.x.bounds[0], A.x.bounds[1]],
+                        "y": [value, value],
+                        "width": 0.5,
+                        "stroke": pop_colors[selects[0]],
+                        "dash": dashes[selects[1]]
+                    })
+                })
+
+                let refs = pop_list
+                    .map(function(e) {
+                        let filtered = d
+                            .filter(f => f.context == context)
+                            .filter(f => e == f.pops)
+                        let value = filtered[0]["_Y"][time]*A.y.scale
+
+                        // Rescale symmetry metric denominator to 5 instead of 6.
+                        if (metric == "SYMMETRY") { value = 1 - (6/5)*(1 - value) }
+
+                        return value
+                    })
+
+                let refdict = {
+                    "X": refs[0],
+                    "A": refs[1],
+                    "B": refs[2],
+                    "C": refs[3],
+                }
+
+                let sorted = S.selected.pops.sort(function(a, b) {
+                    let a_value = d
+                        .filter(f => f.context == context)
+                        .filter(f => a == f.pops)[0]["_Y"][time]
+                    let b_value = d
+                        .filter(f => f.context == context)
+                        .filter(f => b == f.pops)[0]["_Y"][time]
+                    return b_value - a_value
+                })
+
+                sorted.map(function(e, i) {
+                    let pops = e.split("")
+                    let n = e.length
+                    let y = pops.map(g => refdict[g])
+                    let x = pops.map(g => i)
+
+                    // Add reference line
+                    if (n != 1) {
+                        data.push({
+                            "*": "path",
+                            "x": [i , i],
+                            "y": [Math.min(...y), Math.max(...y)],
+                            "width": 1.5,
+                            "stroke": "#ccc"
+                        })
+                    }
+
+                    // Add reference dots.
+                    if (n != 1) {
+                        data.push({
+                            "*": "circle",
+                            "y": y,
+                            "x": x,
+                            "r": 1.5,
+                            "fill": pops.map(f => pop_colors[f]),
+                            "stroke": "none"
+                        })
+                    }
+
+                    // Add actual value.
+                    let filtered = d
+                        .filter(f => f.context == context)
+                        .filter(f => e == f.pops)
+                    let value = filtered[0]["_Y"][time]*A.y.scale
+
+                    // Rescale symmetry metric denominator to 5 instead of 6.
+                    if (metric == "SYMMETRY") { value = 1 - (6/5)*(1 - value) }
+
+                    data.push({
+                        "*": "circle",
+                        "y": [value],
+                        "x": [i],
+                        "r": 2,
+                        "fill": "#000",
+                    })
+
+                    // Add average line.
+                    if (n != 1) {
+                        let v = y.reduce((a, b) => a + b)/n
+
+                        data.push({
+                            "*": "path",
+                            "y": [v, v],
+                            "x": [i - 0.4, i + 0.4],
+                            "width": 1,
+                            "stroke": "#000"
+                        })
+                    }
+                })
+
+                return { "data": [{ "id": "X", "x": 0, "y": 0, "data": data, "pops": sorted }], "rows": 1, "cols": 1 }
+            }
+
+            function LABELLER(S, P) { return labelGrid(S, P) }
+
+            function DECORATOR(g, S, i, p) {
+                decorateTicks(g, S, i, p)
+
+                let pops = p.pops
+                let padding = 10
+                let n = pops.length
+                let xscale = d3.scaleLinear().range([0, S.xscale(1)]).domain([0, n])
+                let yscale = d3.scaleLinear().range([0, AXIS_PADDING.bottom - 4]).domain([0, 4])
+                let r = 3
+
+                let dx = PANEL_PADDING/2 + SUBPANEL_PADDING/2 + AXIS_PADDING.left
+                let dy = PANEL_PADDING/2 + SUBPANEL_PADDING/2 + S.subpanel.h
+
+                let pop_colors = ["#8a7962", "#3ca87a", "#cf4356", "#6cabd0" ]
+
+                let cats = S.G.append("g")
+                    .attr("transform", "translate(" + dx + "," + dy + ")")
+                    .selectAll("g")
+                        .data(pops)
+                        .enter().append("g")
+                            .attr("transform", (d, i) => "translate(" + S.xscale(i) + "," + (r*2) + ")")
+
+                let codes = function(d) {
+                    let codes = [0, 0, 0, 0]
+                    d.split("").map(e => codes["XABC".indexOf(e)] = 1)
+                    return codes
+                }
+
+                cats.append("g").selectAll("circle")
+                    .data(codes)
+                    .enter().append("circle")
+                        .attr("r", d => d == 1 ? r - 1 : r - 2)
+                        .attr("cx", 0)
+                        .attr("cy", (d, i) => yscale(i))
+                        .attr("fill", (d, i) => d == 1 ? "none" : "#ddd")
+
+                cats.append("path")
+                    .attr("d", function(d) {
+                        let c = codes(d)
+                        let start = c.indexOf(1)
+                        let delta = c.lastIndexOf(1) - start
+                        return "m 0," + yscale(start) + " l 0," + yscale(delta)
+                    })
+                    .attr("stroke", "#888")
+                    .attr("stroke-width", "1px")
+
+                cats.append("g").selectAll("circle")
+                    .data(codes)
+                    .enter().append("circle")
+                        .attr("r", d => d == 1 ? r - 1 : r - 2)
+                        .attr("cx", 0)
+                        .attr("cy", (d, i) => yscale(i))
+                        .attr("fill", (d, i) => d == 1 ? pop_colors[i] : "none")
+            }
+        </script>
+    </body>
+</html>
