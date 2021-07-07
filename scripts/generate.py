@@ -22,6 +22,42 @@ def merge_metrics(file, out, keys, extension, code, tar=None):
     out['data'].append(keys)
     out['_X'] = D['_X']
 
+def merge_seeds(file, out, keys, extension, code, tar=None):
+    """Merge seed files across conditions."""
+    filepath = f"{file}{code}{extension}.json"
+
+    if tar:
+        D = load_json(filepath.split("/")[-1], tar=tar)
+    else:
+        D = load_json(filepath)
+
+    keys.pop('time', None)
+    metric = extension.split(".")[-1]
+
+    if metric == "POPS" or metric == "TYPES":
+        timepoints = []
+
+        for i, d in enumerate(D):
+            for key in keys.keys():
+                for dd in d:
+                    dd[key] = keys[key]
+
+            if i == 0:
+                for dd in d:
+                    dd['_'] = [dd['_']]
+                timepoints = timepoints + d
+            else:
+                for tp, dd in zip(timepoints, d):
+                    tp['_'].append(dd['_'])
+                pass
+
+        out['data'] = out['data'] + timepoints
+    else:
+        for key in keys.keys():
+            for d in D:
+                d[key] = keys[key]
+        out['data'] = out['data'] + D
+
 def merge_concentrations(file, out, keys, extension, code, tar=None):
     """Merge concentrations across conditions."""
     filepath = f"{file}{code}{extension}.json"
@@ -76,6 +112,10 @@ def merge_fractions(file, out, keys, extension, code, tar=None):
 
 def save_metrics(file, extension, out):
     """Save merged metrics files."""
+    save_json(file, out, extension)
+
+def save_seeds(file, extension, out):
+    """Save merged seed files."""
     save_json(file, out, extension)
 
 def save_concentrations(file, extension, out):

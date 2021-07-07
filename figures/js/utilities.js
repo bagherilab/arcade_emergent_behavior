@@ -66,6 +66,24 @@ function removeNaNs(arr, remove) {
     return arr.filter((e, i) => remove[i])
 }
 
+function binData(data, bounds, bandwidth) {
+    let N = data.length*bandwidth
+    let n = (bounds[1] - bounds[0])/bandwidth
+    let lower = bounds[0] - bandwidth/2
+    let upper = bounds[1] + bandwidth/2
+    let bins = linspace(lower, upper - bandwidth, n + 1)
+
+    let hist = d3.histogram().domain([lower, upper]).thresholds(bins)(data)
+        .map(e => ({
+            "n": e.length,
+            "x": e.x0,
+            "y": e.length/N,
+            "m": Number(((e.x0 + e.x1)/2).toFixed(3)),
+        }))
+
+    return hist
+}
+
 // -----------------------------------------------------------------------------
 
 function makeHex() {
@@ -98,7 +116,6 @@ function makeHorzLabel(w, x, y, text, fill) {
         "tx": x + w/2, "ty": y - FONT_PADDING, "rotate": false
     }
 }
-
 
 // -----------------------------------------------------------------------------
 

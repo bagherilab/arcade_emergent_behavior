@@ -1,0 +1,204 @@
+<!DOCTYPE html>
+<html>
+    <head>
+        <meta charset="utf-8">
+        <link rel="stylesheet" href="css/style.css" />
+        <script src="https://d3js.org/d3.v4.min.js"></script>
+        <script type="text/javascript" src="js/browser.js"></script>
+        <script type="text/javascript" src="js/functions.js"></script>
+        <script type="text/javascript" src="js/utilities.js"></script>
+    </head>
+    <body>
+        <h1>metric distribution</h1>
+        <div id="buttons">
+            <button id="generate">GENERATE</button>
+            <button id="save">SAVE</button>
+        </div>
+        <div id="options">
+            <div id="metrics">
+                <strong>METRIC</strong>
+                <label class="inputs"><input type="radio" name="metric" id="metric_GROWTH">growth rate</label>
+                <label class="inputs"><input type="radio" name="metric" id="metric_SYMMETRY">symmetry</label>
+                <label class="inputs"><input type="radio" name="metric" id="metric_CYCLES">cycle length</label>
+            </div>
+        </div>
+        <div id="canvas"></div>
+        <script>
+            var PREFIX = "metric_distribution"
+            var SIZE = { "width": 400, "height": 400 }
+            var OPTIONS = [ "metrics" ]
+            var SELECTED = {
+                "radios": {
+                    "metric": "GROWTH",
+                }
+            }
+            var LABELS = { }
+
+            initialize()
+
+            var Y_AXIS = {
+                "GROWTH": {
+                    "scale": 30, // hexagon/day => um/day
+                    "bounds": [35, 55], // mm/day
+                    "title": 'Growth Rate (\u03BCm/day)',
+                    "n": 3,
+                    "padding": 2,
+                    "bandwidth": 1,
+                },
+                "SYMMETRY": {
+                    "scale": 1,
+                    "bounds": [0.6, 1], // unitless
+                    "title": 'Symmetry',
+                    "n": 3,
+                    "padding": 0.01,
+                    "bandwidth": 0.01,
+                },
+                "CYCLES": {
+                    "scale": 1/60.0, // min => hours
+                    "bounds": [14, 26], // hours
+                    "title": 'Average Cell Cycle Length (hours)',
+                    "n": 3,
+                    "padding": 1,
+                    "bandwidth": 0.5,
+                },
+            }
+
+            function PROCESSOR() {
+                let selected = {
+                    "metric": SELECTED.radios.metric,
+                    "pops": ["X", "A", "B", "C"],
+                }
+
+                let name = function(arr) {
+                    return "GROWTH_CONTEXT/GROWTH_CONTEXT.SEEDS." + selected.metric + ".json"
+                }
+
+                let make = processMake([], selected, [], name)
+                let p = processGrid([], selected, make)
+
+                return {
+                    "selected": selected,
+                    "layout": [],
+                    "files": p.files,
+                    "margin": {
+                        "left": p.marginLeft,
+                        "top": p.marginTop,
+                        "right": 5,
+                        "bottom": 5,
+                        "axis": AXIS_PADDING
+                    },
+                    "cols": p.nCols,
+                    "rows": p.nRows,
+                    "axis": {
+                        "x": {
+                            "bounds": [0, 4],
+                            "labels": (e, i) => (i == 0 ? "*" : selected.pops[i - 1]),
+                            "n": 5,
+                            "padding": 0.5,
+                        },
+                        "y": Y_AXIS[selected.metric]
+                    }
+                }
+            }
+
+            function PARSER(code, S, D) {
+                let data = []
+                let d = D.data.data.filter(e => e.time == 15)
+                let pops = S.selected.pops
+                let contexts = ["C", "CHX"]
+
+                let addViolin = function(values, fill, stroke, offset) {
+                    let hist = binData(values, S.axis.y.bounds, S.axis.y.bandwidth)
+                    let n = values.length
+                    let mean = values.reduce((a, b) => a + b)/n
+                    let max_value = hist.map(e => e.n/n).reduce((a, b) => Math.max(a, b))
+                    let rescale = d3.scaleLinear().range([0, 0.3]).domain([0, max_value])
+
+                    data.push({
+                        "*": "violin",
+                        "x": hist.map(e => e.x),
+                        "y": hist.map(e => rescale(e.n/n)),
+                        "offset": offset - 0.5,
+                        "fill": fill,
+                        "stroke": stroke,
+                        "width": 0.5
+                    })
+                }
+
+                let fills = ["#c1b9ae", "#78cfaa", "#e3929d", "#b7d6e8"]
+                let strokes = ["#8a7962", "#3ca87a", "#cf4356", "#6cabd0"]
+
+                contexts.map(function(context, i) {
+                    let y = []
+                    let dd = d
+                        .filter(e => e.context == context)
+                        .map(e => e["_"].map(v => y.push(v*S.axis.y.scale)))
+
+                    // Rescale symmetry metric denominator to 5 instead of 6.
+                    if (S.selected.metric == "SYMMETRY") { y = y.map(e => 1 - (6/5)*(1 - e)) }
+
+                    if (i == 0) { addViolin(y, "#aaa", "none", 0) }
+                    else { addViolin(y, "url(#hatch)", "#555", 0) }
+                })
+
+                pops.map(function(pop, i) {
+                    let yC = []
+                    d.filter(e => e.context == "C")
+                        .filter(e => e.pops.indexOf(pop) != -1)
+                        .map(e => e["_"].map(v => yC.push(v*S.axis.y.scale)))
+
+                    // Rescale symmetry metric denominator to 5 instead of 6.
+                    if (S.selected.metric == "SYMMETRY") { yC = yC.map(e => 1 - (6/5)*(1 - e)) }
+
+                    addViolin(yC, fills[i], "none", i + 1)
+
+                    let yCHX = []
+                    d.filter(e => e.context == "CHX")
+                        .filter(e => e.pops.indexOf(pop) != -1)
+                        .map(e => e["_"].map(v => yCHX.push(v*S.axis.y.scale)))
+
+                    // Rescale symmetry metric denominator to 5 instead of 6.
+                    if (S.selected.metric == "SYMMETRY") { yCHX = yCHX.map(e => 1 - (6/5)*(1 - e)) }
+
+                    addViolin(yCHX, "url(#hatch-" + pop + ")", strokes[i], i + 1)
+                })
+
+                return { "data": [{ "id": "X", "x": 0, "y": 0, "data": data }], "rows": 1, "cols": 1 }
+            }
+
+            function LABELLER(S, P) { return labelGrid(S, P) }
+
+            function DECORATOR(g, S, i, p) {
+                decorateTicks(g, S, i, p)
+
+                let defs = S.G.append("defs")
+                let pops = S.selected.pops
+                let strokes = ["#8a7962", "#3ca87a", "#cf4356", "#6cabd0"]
+
+                pops.map(function(pop, i) {
+                    defs.append("pattern")
+                        .attr("id", "hatch-" + pop)
+                        .attr("width", 3)
+                        .attr("height", 3)
+                        .attr("patternTransform", "rotate(-45)")
+                        .attr("patternUnits", "userSpaceOnUse")
+                        .append("rect")
+                            .attr("width", 3)
+                            .attr("height", 1)
+                            .attr("fill", strokes[i])
+                })
+
+                defs.append("pattern")
+                    .attr("id",  "hatch")
+                    .attr("width", 3)
+                    .attr("height", 3)
+                    .attr("patternTransform", "rotate(-45)")
+                    .attr("patternUnits", "userSpaceOnUse")
+                    .append("rect")
+                        .attr("width", 3)
+                        .attr("height", 1)
+                        .attr("fill", "#555")
+            }
+        </script>
+    </body>
+</html>
