@@ -1,0 +1,160 @@
+<!DOCTYPE html>
+<html>
+    <head>
+        <meta charset="utf-8">
+        <link rel="stylesheet" href="css/style.css" />
+        <script src="https://d3js.org/d3.v4.min.js"></script>
+        <script type="text/javascript" src="js/browser.js"></script>
+        <script type="text/javascript" src="js/functions.js"></script>
+        <script type="text/javascript" src="js/utilities.js"></script>
+    </head>
+    <body>
+        <h1>temporal competition</h1>
+        <div id="buttons">
+            <button id="generate">GENERATE</button>
+            <button id="save">SAVE</button>
+        </div>
+        <div id="options">
+            <div id="metrics">
+                <strong>METRIC</strong>
+                <label class="inputs"><input type="radio" name="metric" id="metric_GROWTH">growth rate</label>
+                <label class="inputs"><input type="radio" name="metric" id="metric_SYMMETRY">symmetry</label>
+                <label class="inputs"><input type="radio" name="metric" id="metric_CYCLES">cycle length</label>
+            </div>
+        </div>
+        <div id="canvas"></div>
+        <script>
+            var PREFIX = "temporal_competition"
+            var SIZE = { "width": 600, "height": 600 }
+            var OPTIONS = [ "metrics" ]
+            var SELECTED = {
+                "radios": {
+                    "metric": "GROWTH",
+                }
+            }
+            var LABELS = {
+                "param": {
+                    "max_height": "crowding tolerance",
+                    "meta_pref": "metabolic preference",
+                    "migra_threshold": "migratory threshold",
+                },
+                "init": {
+                    "090-010": "10 %",
+                    "050-050": "50 %",
+                    "010-090": "90 %",
+                }
+            }
+
+            initialize()
+
+            var Y_AXIS = {
+                "GROWTH": {
+                    "scale": 30, // hexagon/day => um/day
+                    "bounds": [0, 100], // mm/day
+                    "title": 'Growth Rate (\u03BCm/day)',
+                    "n": 3,
+                    "padding": 2
+                },
+                "SYMMETRY": {
+                    "scale": 1,
+                    "bounds": [0.7, 1], // unitless
+                    "title": 'Symmetry',
+                    "n": 4,
+                    "padding": 0.01
+                },
+                "CYCLES": {
+                    "scale": 1/60.0, // min => hours
+                    "bounds": [14, 26], // hours
+                    "title": 'Average Cell Cycle Length (hours)',
+                    "n": 3,
+                    "padding": 1
+                },
+            }
+
+            function PROCESSOR() {
+                let selected = {
+                    "metric": SELECTED.radios.metric,
+                    "param": ["max_height", "meta_pref", "migra_threshold"],
+                    "perc": [
+                        "000", "010", "020", "030", "040", "050",
+                        "060", "070", "080", "090", "100",
+                        "110", "120", "130", "140", "150",
+                        "160", "170", "180", "190", "200"
+                    ],
+                    "init": ["090-010", "050-050", "010-090"]
+                }
+
+                let name = function(arr) {
+                    return "CELL_COMPETITION/CELL_COMPETITION.METRICS." + selected.metric + ".json"
+                }
+
+                let layout = ["init", "param"]
+                let make = processMake(layout, selected, [], name)
+                let p = processGrid(layout, selected, make)
+
+                return {
+                    "selected": selected,
+                    "layout": layout,
+                    "files": p.files,
+                    "margin": {
+                        "left": p.marginLeft,
+                        "top": p.marginTop,
+                        "right": 5,
+                        "bottom": 5,
+                        "axis": AXIS_PADDING
+                    },
+                    "cols": p.nCols,
+                    "rows": p.nRows,
+                    "axis": {
+                        "x": {
+                            "bounds": [1, 15],
+                            "title": "Time (days)",
+                            "n": 3,
+                            "padding": 0.5
+                        },
+                        "y": Y_AXIS[selected.metric]
+                    }
+                }
+            }
+
+            function PARSER(code, S, D) {
+                let A = S.axis
+                let key = "perc"
+                let d = D.data.data
+                    .filter(e => e[S.layout[0]] == S.selected[S.layout[0]][D.i[0]])
+                    .filter(e => e[S.layout[1]] == S.selected[S.layout[1]][D.i[1]])
+                    .filter(e => contains(e[key], S.selected[key]))
+
+                let data = []
+
+                d.map(function(e) {
+                    let y = e['_Y'].map(e => Number(e)*A.y.scale)
+                    let remove = findNaNs(y)
+                    y = removeNaNs(y, remove)
+
+                    let x = D.data["_X"]
+                        .filter((e, i) => remove[i] )
+                        .map(e => Number(e))
+
+                    // Rescale symmetry metric denominator to 5 instead of 6.
+                    if (S.selected.metric == "SYMMETRY") { y = y.map(e => 1 - (6/5)*(1 - e)) }
+
+                    data.push({
+                        "*": "path",
+                        "x": x,
+                        "y": y,
+                        "width": 1.5,
+                        "stroke": COLORS["param"](e[key]),
+                        "dash": e[key] == "R" ? "2,2" : null
+                    })
+                })
+
+                return { "data": [{ "id": "X", "x": 0, "y": 0, "data": data }], "rows": 1, "cols": 1 }
+            }
+
+            function LABELLER(S, P) { return labelGrid(S, P) }
+
+            function DECORATOR(g, S, i, p) { decorateTicks(g, S, i, p) }
+        </script>
+    </body>
+</html>
