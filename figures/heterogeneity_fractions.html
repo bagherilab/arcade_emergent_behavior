@@ -1,0 +1,330 @@
+<!DOCTYPE html>
+<html>
+    <head>
+        <meta charset="utf-8">
+        <link rel="stylesheet" href="css/style.css" />
+        <script src="https://d3js.org/d3.v4.min.js"></script>
+        <script type="text/javascript" src="js/browser.js"></script>
+        <script type="text/javascript" src="js/functions.js"></script>
+        <script type="text/javascript" src="js/utilities.js"></script>
+    </head>
+    <body>
+        <h1>heterogeneity fractions</h1>
+        <div id="buttons">
+            <button id="generate">GENERATE</button>
+            <button id="save">SAVE</button>
+        </div>
+        <div id="options">
+            <div id="views">
+                <strong>VIEW</strong>
+                <label class="inputs"><input type="radio" name="view" id="view_chet">heterogeneity</label>
+                <label class="inputs"><input type="radio" name="view" id="view_thet">tissue heterogeneity</label>
+            </div>
+        </div>
+        <div id="canvas"></div>
+        <script>
+            var PREFIX = "heterogeneity_fractions"
+            var SIZE = { "width": 900, "height": 250 }
+            var OPTIONS = [ "views" ]
+            var SELECTED = {
+                "radios": {
+                    "view": "chet",
+                }
+            }
+            var LABELS = {
+                "pops": {
+                    "X": "X",
+                    "A": "A",
+                    "B": "B",
+                    "C": "C",
+                },
+            }
+
+            initialize()
+
+            function PROCESSOR() {
+                let selected = {
+                    "view": SELECTED.radios.view,
+                    "pops": ["X", "A", "B", "C"],
+                    "chet": ["00", "10", "20", "30", "40", "50"],
+                    "thet": ["00", "10", "20", "30", "40", "50"],
+                }
+
+                let layout = ["pops"]
+                let name = function(arr) { return "POPULATION_HETEROGENEITY/POPULATION_HETEROGENEITY.FRACTIONS.json" }
+
+                let make = processMake(layout, selected, [], name)
+                let p = processGrid(layout, selected, make)
+
+                return {
+                    "selected": selected,
+                    "layout": layout,
+                    "files": p.files,
+                    "margin": {
+                        "left": p.marginLeft,
+                        "top": p.marginTop,
+                        "right": 5,
+                        "bottom": 5,
+                        "axis": AXIS_PADDING
+                    },
+                    "cols": p.nCols,
+                    "rows": p.nRows,
+                    "axis": {
+                        "x": {
+                            "bounds": (selected.view == "chet" ? [0, 50] : [-10, 50]),
+                            "n": (selected.view == "chet" ? 6 : 7),
+                            "padding": 5,
+                            "labels": (e => (e == -10 ? "&#8226;" : e)),
+                            "title": (selected.view == "thet" ? "Tissue " : "") + "Heterogeneity"
+                        },
+                        "y": {
+                            "scale": 1,
+                            "bounds": [-1, 1],
+                            "title": "Relative Fraction Change",
+                            "n": 5,
+                            "padding": 0.05
+                        }
+                    }
+                }
+            }
+
+            function PARSER(code, S, D) {
+                let view = S.selected.view
+
+                let all_pop_colors = {
+                    "X":"#8a7962",
+                    "A":"#3ca87a",
+                    "B":"#cf4356",
+                    "C": "#6cabd0"
+                }
+
+                let getValue = function(y) {
+                    let time0 = 2
+                    let time = 30
+
+                    let y0 = y[time0]
+                    let y0max = 1 - y0
+                    let y0min = y0
+
+                    let val = y.map(function(f) {
+                        let delta = Number(f) - y0
+                        return (delta > 0 ? delta/y0max : delta/y0min)
+                    })
+
+                    return val[time]
+                }
+
+                let getPopColor = function(pops, pop) {
+                    let all_pops = pops.split("")
+                    let other_pops = all_pops.filter(e => e != pop)
+                    let colors = other_pops.map(e => all_pop_colors[e])
+                    return colors
+                }
+
+                var seed = 1
+
+                function getRandom() {
+                    let x = Math.sin(seed++) * 10000
+                    return (x - Math.floor(x) - 0.5)*1
+                }
+
+                let getFractionPosition = function(data) {
+                    return data.map(function(e) {
+                        if (view == "chet") { return Number(e.chet) + 5*getRandom()*(e.context == "C" ? 0 : 1) }
+                        else { return Number(e.thet) - (e.context == "C" ? 10 : 0) + 5*getRandom() }
+                    })
+                }
+
+                let data = []
+
+                let this_pop = S.selected.pops[D.i[0]]
+                let d = D.data.data
+                    .filter(e => e["pop"] == D.i[0])
+                    .filter(e => contains(this_pop, e.pops.split("")))
+
+                let pops = d.filter(e => e.pops.split("").length > 1 ).map(e => e.pops)
+                let pops_unique = [...new Set(pops)]
+
+                pops_unique.map(function(pops) {
+                    let average_C = []
+                    let average_CHX = []
+
+                    S.selected[view].map(function(h) {
+                        let values = d
+                            .filter(f => f[view] == h)
+                            .filter(f => f.pops == pops)
+
+                        let values_C = values
+                            .filter(f => f.context == "C")
+                            .map(f => getValue(f["_Y"]))
+
+                        let values_CHX = values
+                            .filter(f => f.context == "CHX")
+                            .map(f => getValue(f["_Y"]))
+
+                        if (values_C.length > 0) { values_C = values_C.reduce((a, b) => a + b)/values_C.length }
+                        values_CHX = values_CHX.reduce((a, b) => a + b)/values_CHX.length
+
+                        average_C.push(values_C)
+                        average_CHX.push(values_CHX)
+                    })
+
+                    let line_color = getPopColor(pops, this_pop)
+                    let x_positions = S.selected[view].map(e => Number(e))
+
+                    if (view == "thet") {
+                        average_CHX = [average_C[0]].concat(average_CHX)
+                        x_positions = [-10].concat(x_positions)
+                    }
+
+                    if (view == "chet") {
+                        data.push({
+                            "*": "path",
+                            "y": average_C,
+                            "x": x_positions,
+                            "stroke": (line_color.length == 3 ? "#000": line_color[0]),
+                            "width": 1,
+                            "dash": (line_color.length == 2 ? "4,4" : null)
+                        })
+                    }
+
+                    data.push({
+                        "*": "path",
+                        "y": average_CHX,
+                        "x": x_positions,
+                        "stroke": (line_color.length == 3 ? "#000": line_color[0]),
+                        "width": (view == "thet" ? 1.5 : 2),
+                        "dash": (line_color.length == 2 ? "4,4" : null)
+                    })
+
+                    if (line_color.length == 2) {
+                        if (view == "chet") {
+                            data.push({
+                                "*": "path",
+                                "y": average_C,
+                                "x": x_positions,
+                                "stroke": line_color[1],
+                                "width": 1,
+                                "offset": 4,
+                                "dash": "4,4"
+                            })
+                        }
+
+                        data.push({
+                            "*": "path",
+                            "y": average_CHX,
+                            "x": x_positions,
+                            "stroke": line_color[1],
+                            "width": (view == "thet" ? 1.5 : 2),
+                            "offset": 4,
+                            "dash": "4,4"
+                        })
+                    }
+                })
+
+                {
+                    let d_2 = d.filter(e => e.pops.split("").length == 2)
+                    let x = getFractionPosition(d_2)
+                    let y = d_2.map(e => getValue(e["_Y"]))
+                    let f = d_2.map(e => e.context == "C" ? (view == "chet" ? ["#fff"] : ["none"]) : getPopColor(e.pops, this_pop) )
+                    let s = d_2.map(e => e.context == "C" ?  getPopColor(e.pops, this_pop) : ["none"] )
+                    let r = d_2.map(e => e.context == "C" ?  2 : 1.5 )
+
+                    data.push({
+                        "*": "circle",
+                        "r": r,
+                        "x": x,
+                        "y": y,
+                        "fill": f.map(e => e[0]),
+                        "stroke": s.map(e => e[0]),
+                    })
+                }
+                {
+                    let d_3 = d.filter(e => e.pops.split("").length == 3)
+                    let x = getFractionPosition(d_3)
+                    let y = d_3.map(e => getValue(e["_Y"]))
+                    let f = d_3.map(e => e.context == "C" ? (view == "chet" ? ["#fff", "#fff"] : ["none", "none"]) : getPopColor(e.pops, this_pop) )
+                    let s = d_3.map(e => e.context == "C" ?  getPopColor(e.pops, this_pop) : ["none", "none"] )
+                    let r = d_3.map(e => e.context == "C" ? "A" : "B" )
+
+                    data.push({
+                        "*": "symbol",
+                        "scale": true,
+                        "cx": x,
+                        "cy": y,
+                        "link": x.map((e, i) => "#right" + r[i]),
+                        "fill": f.map(e => e[0]),
+                        "stroke": s.map(e => e[0])
+                    })
+
+                    data.push({
+                        "*": "symbol",
+                        "scale": true,
+                        "cx": x,
+                        "cy": y,
+                        "link": x.map((e, i) => "#left" + r[i]),
+                        "fill": f.map(e => e[1]),
+                        "stroke": s.map(e => e[1])
+                    })
+                }
+                {
+                    let d_4 = d.filter(e => e.pops.split("").length == 4)
+                    x = getFractionPosition(d_4)
+                    y = d_4.map(e => getValue(e["_Y"]))
+                    f = d_4.map(e => e.context == "C" ? (view == "chet" ? "#fff" : "none") : "#000" )
+                    s = d_4.map(e => e.context == "C" ?  "#000" : "none" )
+                    r = d_4.map(e => e.context == "C" ?  2 : 1.5 )
+
+                    data.push({
+                        "*": "circle",
+                        "r": r,
+                        "x": x,
+                        "y": y,
+                        "fill": f,
+                        "stroke": s,
+                    })
+                }
+
+                return { "data": [{ "id": "X", "x": 0, "y": 0, "data": data }], "rows": 1, "cols": 1 }
+            }
+
+            function LABELLER(S, P) { return labelGrid(S, P) }
+
+            function DECORATOR(g, S, i, p) {
+                decorateTicks(g, S, i, p)
+
+                let gg = g.insert("g",":first-child")
+
+                addLine(g, 0, S.subpanel.w, S.yscale(0), S.yscale(0), "#ccc", "1px")
+                    .attr("stroke-dasharray", "4,4")
+
+                let indices = [0, 10, 20, 30, 40]
+                indices.map(ind => addLine(gg, S.xscale(ind + 5), S.xscale(ind + 5), 0, S.subpanel.h, "#eee", "1px"))
+
+                if (S.selected.view == "thet") {
+                    addLine(gg, S.xscale(-5), S.xscale(-5), 0, S.subpanel.h, "#ddd", "2px")
+                }
+
+                if (i[0] == 0) {
+                    let defs = S.G.append("defs")
+
+                    defs.append("path")
+                        .attr("id", "leftA")
+                        .attr("d", "M 0,-2 a 2,2 0 0,0 0,4 ")
+
+                    defs.append("path")
+                        .attr("id", "rightA")
+                        .attr("d", "M 0,-2 a 2,2 0 0,1 0,4 ")
+
+                    defs.append("path")
+                        .attr("id", "leftB")
+                        .attr("d", "M 0,-1.5 a 1.5,1.5 0 0,0 0,3 ")
+
+                    defs.append("path")
+                        .attr("id", "rightB")
+                        .attr("d", "M 0,-1.5 a 1.5,1.5 0 0,1 0,3 ")
+                }
+            }
+        </script>
+    </body>
+</html>
