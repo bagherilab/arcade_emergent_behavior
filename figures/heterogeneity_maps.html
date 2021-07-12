@@ -9,7 +9,7 @@
         <script type="text/javascript" src="js/utilities.js"></script>
     </head>
     <body>
-        <h1>competition maps</h1>
+        <h1>heterogeneity maps</h1>
         <div id="buttons">
             <button id="generate">GENERATE</button>
             <button id="save">SAVE</button>
@@ -24,8 +24,8 @@
         </div>
         <div id="canvas"></div>
         <script>
-            var PREFIX = "competition_maps"
-            var SIZE = { "width": 829, "height": 276 }
+            var PREFIX = "heterogeneity_maps"
+            var SIZE = { "width": 796, "height": 178.5 }
             var OPTIONS = [ "metrics" ]
             var SELECTED = {
                 "radios": {
@@ -33,18 +33,28 @@
                 }
             }
             var LABELS = {
-                "param": {
-                    "max_height": "crowding tolerance",
-                    "meta_pref": "metabolic preference",
-                    "migra_threshold": "migratory threshold",
+                "pops": {
+                    "X": "X",
+                    "A": "A",
+                    "B": "B",
+                    "C": "C",
                 },
-                "perc": {
-                    "050": "-50", "060": "-40", "070": "-30", "080": "-20","090": "-10",
-                    "100": "0", "110": "+10", "120": "+20", "130": "+30", "140": "+40", "150": "+50",
+                "chet": {
+                    "00": "0",
+                    "10": "10",
+                    "20": "20",
+                    "30": "30",
+                    "40": "40",
+                    "50": "50",
                 },
-                "init": {
-                    "000-100": "100", "010-090": "90", "020-080": "80", "030-070": "70", "040-060": "60",
-                    "050-050": "50", "060-040": "40", "070-030": "30", "080-020": "20", "090-010": "10", "100-000": "0"
+                "thet": {
+                    "X": "&#8226;",
+                    "00": "0",
+                    "10": "10",
+                    "20": "20",
+                    "30": "30",
+                    "40": "40",
+                    "50": "50",
                 },
             }
 
@@ -53,22 +63,16 @@
             function PROCESSOR() {
                 let selected = {
                     "metric": SELECTED.radios.metric,
-                    "param": ["max_height", "meta_pref", "migra_threshold"],
-                    "perc": [
-                        "050", "060", "070", "080", "090",
-                        "110", "120", "130", "140", "150",
-                    ],
-                    "init": [
-                        "100-000", "090-010", "080-020", "070-030", "060-040",
-                        "050-050", "040-060", "030-070", "020-080", "010-090", "000-100",
-                    ],
+                    "pops": ["X", "A", "B", "C"],
+                    "chet": ["10", "20", "30", "40", "50"],
+                    "thet": ["X", "00", "10", "20", "30", "40", "50"],
                 }
 
                 let name = function(arr) {
-                    return "CELL_COMPETITION/CELL_COMPETITION.MAPS." + selected.metric + ".csv"
+                    return "POPULATION_HETEROGENEITY/POPULATION_HETEROGENEITY.MAPS." + selected.metric + ".csv"
                 }
 
-                let layout = ["param"]
+                let layout = ["pops"]
                 let make = processMake(layout, selected, [], name)
                 let p = processGrid(layout, selected, make)
 
@@ -81,24 +85,24 @@
                     "cols": p.nCols,
                     "rows": p.nRows,
                     "axis": {
-                        "x": { "bounds": [0, selected["init"].length] },
-                        "y": { "bounds": [0, selected["perc"].length] },
-                        "c": [-0.3, 0.3]
+                        "x": { "bounds": [0, selected["thet"].length] },
+                        "y": { "bounds": [0, selected["chet"].length] },
+                        "c": [-0.2, 0.2]
                     }
                 }
             }
 
             function PARSER(code, S, D) {
-                let row = "init"
-                let col = "perc"
+                let row = "thet"
+                let col = "chet"
                 let rows = S.selected[row]
                 let cols = S.selected[col]
 
-                let param = S.selected.param[D.i[0]]
+                let pops = S.selected.pops[D.i[0]]
                 let d = D.data
-                    .filter(e => e.time == 14)
-                    .filter(e => e.param == param)
-                    .filter(e => e.perc != "100")
+                    .filter(e => e.time == 15)
+                    .filter(e => e.pops == pops)
+                    .filter(e => e.chet != "00")
 
                 let bounds = S.axis.c
                 let cmap = d3.scaleLinear().range(COLORMAPS['div'])
@@ -111,7 +115,7 @@
                 let data = [
                     {
                         "*": "rect",
-                        "x": d.map(e => rows.indexOf(e[row])),
+                        "x": d.map(e => (e.context == "C" ? 0 : rows.indexOf(e[row]))),
                         "y": d.map(e => cols.indexOf(e[col]) + 1),
                         "height": d.map(e => 1),
                         "width": d.map(e => 1),
@@ -119,9 +123,10 @@
                         "dw": d.map(e => -0.5),
                         "fill": d.map(function(e) {
                             let d0 = D.data
-                                .filter(e1 => e1["param"] == e["param"])
-                                .filter(e1 => e1["init"] == e["init"])
-                                .filter(e1 => e1["perc"] == "100")
+                                .filter(e1 => e1["pops"] == e["pops"])
+                                .filter(e1 => e1["context"] == e["context"])
+                                .filter(e1 => e1["thet"] == e["thet"])
+                                .filter(e1 => e1["chet"] == "00")
                             let m0 = Number(d0[0].metric)
                             let m = Number(e.metric)
 
@@ -132,8 +137,6 @@
                             }
 
                             let log2 = Math.log2(m/m0)
-
-                            if (param != "max_height") { log2 = log2*10 }
 
                             if (Math.abs(log2) > Math.abs(bounds[1])) {
                                 if (Math.abs(log2) > Math.abs(bounds[1])*10) { console.log(log2) }
@@ -151,8 +154,8 @@
             function LABELLER(S, P) { return labelGrid(S, P) }
 
             function DECORATOR(g, S, i, p) {
-                let rows = S.selected["init"]
-                let cols = S.selected["perc"]
+                let rows = S.selected["thet"]
+                let cols = S.selected["chet"]
 
                 let tx = PANEL_PADDING/2 + SUBPANEL_PADDING/2 + MAP_PADDING.left
                 let ty = PANEL_PADDING/2 + SUBPANEL_PADDING/2
@@ -165,7 +168,7 @@
                     .selectAll("text")
                         .data(rows).enter()
                         .append("text")
-                            .text(d => LABELS["init"][d])
+                            .html(d => LABELS["thet"][d])
                             .attr("y", 2)
                             .attr("x", (d, i) => S.xscale(i + 0.5))
                             .attr("font-family", "Courier")
@@ -182,7 +185,7 @@
                     .selectAll("text")
                         .data(cols).enter()
                         .append("text")
-                            .text(d => LABELS["perc"][d])
+                            .text(d => LABELS["chet"][d])
                             .attr("x", FONT_SIZE)
                             .attr("y", (d, i) => S.yscale(i + 0.5) + FONT_SIZE/2 - 1)
                             .attr("font-family", "Courier")
@@ -201,8 +204,8 @@
 
                 // Create axis labels.
                 let labels = []
-                labels.push(makeHorzLabel(S.subpanel.w, 0, alignHorzText(S), "Initial % Modified", "none"))
-                labels.push(makeVertLabel(S.subpanel.h, alignVertText(S), 0, "% Change in Parameter", "none"))
+                labels.push(makeHorzLabel(S.subpanel.w, 0, alignHorzText(S), "Background Heterogeneity", "none"))
+                labels.push(makeVertLabel(S.subpanel.h, alignVertText(S), 0, "Heterogeneity", "none"))
 
                 addLabels(G, labels)
             }
