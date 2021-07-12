@@ -292,6 +292,21 @@ function plotRect(g, S) {
             .attr("stroke-dasharray", d => d.dash)
 }
 
+function plotStep(g, S) {
+    g.append("path")
+        .attr("d", function(d) {
+            let makeStep = d3.line()
+                .x(e => S.xscale(e))
+                .y((e, i) => S.yscale(d.y[i]))
+                .curve(d3.curveStepAfter)
+            return makeStep(d.x)
+        })
+        .attr("fill", "none")
+        .attr("stroke", d => (d.stroke ? d.stroke : "#555"))
+        .attr("stroke-width", d => (d.width ? d.width : 1))
+        .attr("stroke-dasharray", d => (d.dash ? d.dash : null))
+    }
+
 // LABELERS ====================================================================
 
 function labelGrid(S, P) {

@@ -1,0 +1,173 @@
+<!DOCTYPE html>
+<html>
+    <head>
+        <meta charset="utf-8">
+        <link rel="stylesheet" href="css/style.css" />
+        <script src="https://d3js.org/d3.v4.min.js"></script>
+        <script type="text/javascript" src="js/browser.js"></script>
+        <script type="text/javascript" src="js/functions.js"></script>
+        <script type="text/javascript" src="js/utilities.js"></script>
+    </head>
+    <body>
+        <h1>parameter distributions</h1>
+        <div id="buttons">
+            <button id="generate">GENERATE</button>
+            <button id="save">SAVE</button>
+        </div>
+        <div id="options">
+            <div id="params">
+                <strong>PARAMETER</strong>
+                <label class="inputs"><input type="radio" name="param" id="param_MAX-HEIGHT">crowding tolerance</label>
+                <label class="inputs"><input type="radio" name="param" id="param_META-PREF">metabolic preference</label>
+                <label class="inputs"><input type="radio" name="param" id="param_MIGRA-THRESHOLD">migratory threshold</label>
+            </div>
+        </div>
+        <div id="canvas"></div>
+        <script>
+            var PREFIX = "parameter_distributions"
+            var SIZE = { "width": 400, "height": 600 }
+            var OPTIONS = [ "params" ]
+            var SELECTED = {
+                "radios": {
+                    "param": "MAX-HEIGHT",
+                }
+            }
+            var LABELS = {
+                "context": {
+                    "C": "colony",
+                    "CH": "tissue",
+                },
+                "pops": {
+                    "X": "X",
+                    "A": "A",
+                    "B": "B",
+                    "C": "C",
+                },
+            }
+
+            initialize()
+            var X_AXIS = {
+                "MAX-HEIGHT": {
+                    "bounds": [0, 40], // um
+                    "title": "Crowding Tolerance (\u03BCm)",
+                    "n": 3,
+                    "bandwidth": 1,
+                    "padding": 2
+                },
+                "META-PREF": {
+                    "bounds": [0, 0.6],
+                    "title": "Metabolic Preference",
+                    "n": 3,
+                    "bandwidth": 0.02,
+                    "padding": 0.05
+                },
+                "MIGRA-THRESHOLD": {
+                    "bounds": [0, 5],
+                    "title": "Migratory Threshold",
+                    "n": 3,
+                    "bandwidth": 0.1,
+                    "padding": 0.1
+                },
+            }
+
+            function PROCESSOR() {
+                let selected = {
+                    "param": SELECTED.radios.param,
+                    "context": ["C", "CH"],
+                    "pops": ["X", "A", "B", "C"],
+                }
+
+                let layout = ["context", "pops"]
+                let name = function(arr) {
+                    let thet = (arr[0] == "C" ? "00" : "40")
+                    return "POPULATION_HETEROGENEITY/POPULATION_HETEROGENEITY"
+                        + "_" + arr.join("_") + "_40_" + thet + ".PARAMETERS.json"
+                }
+
+                let make = processMake(layout, selected, [0, 1], name)
+                let p = processGrid(layout, selected, make)
+
+                return {
+                    "selected": selected,
+                    "layout": layout,
+                    "files": p.files,
+                    "margin": {
+                        "left": p.marginLeft, "top": p.marginTop,
+                        "right": 5, "bottom": 5,
+                        "axis": AXIS_PADDING
+                    },
+                    "cols": p.nCols,
+                    "rows": p.nRows,
+                    "axis": {
+                        "x": X_AXIS[selected.param],
+                        "y": {
+                            "bounds": [0, 1],
+                            "title": "Fraction of Replicates",
+                            "n": 3,
+                            "padding": 0.05
+                        }
+                    }
+                }
+            }
+
+            function PARSER(code, S, D) {
+                let parameter = S.selected.param.replace(/-/g, "_")
+                let times = [1, 8, 15]
+                let pops = S.selected.pops
+
+                let colors = {
+                    "1": "#ccc",
+                    "8": "#777",
+                    "15": "#222"
+                }
+
+                let d = D.data[parameter]
+                    .filter(e => contains(e["time"], times))
+                    .filter(e => e["contains"].join(",") === "0,1,2,3")
+
+                let data = []
+
+                d.map(function(e) {
+                    let bandwidth = S.axis.x.bandwidth
+                    let bounds = S.axis.x.bounds
+                    let hist = binData(e.data, bounds, bandwidth)
+                    let n = e.data.length
+                    let color = colors[e.time]
+
+                    data.push({
+                        "*": "rect",
+                        "x": hist.map(f => f.x),
+                        "y": hist.map(f => f.n/n),
+                        "width": hist.map(f => S.axis.x.bandwidth),
+                        "height": hist.map(f => f.n/n),
+                        "fill": color,
+                        "opacity": 0.4,
+                    })
+
+                    data.push({
+                        "*": "step",
+                        "x": hist.map(f => f.x),
+                        "y": hist.map(f => f.n/n),
+                        "stroke": color,
+                    })
+
+                    let average = e.data.reduce((a, b) => a + b)/n
+
+                    data.push({
+                        "*": "circle",
+                        "x": [average],
+                        "y": [S.axis.y.bounds[1]*0.9],
+                        "r": [3],
+                        "fill": [color],
+                    })
+                })
+
+                return { "data": [{ "id": "X", "x": 0, "y": 0, "data": data }], "rows": 1, "cols": 1 }
+            }
+
+            function LABELLER(S, P) { return labelGrid(S, P) }
+
+            function DECORATOR(g, S, i, p) { decorateTicks(g, S, i, p) }
+        </script>
+    </body>
+</html>

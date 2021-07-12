@@ -2,7 +2,7 @@ import numpy as np
 from .analyze import *
 from math import sqrt
 from scipy.optimize import curve_fit
-from scipy.stats import sem
+from scipy.stats import sem, ttest_rel, levene
 
 # GENERAL ANALYSIS FUNCTIONS ===================================================
 
@@ -493,3 +493,66 @@ def merge_competition_populations(file, out, keys, extension, code, tar=None):
 def save_competition_populations(file, extension, out):
     """Save merged cell populations file."""
     save_csv(file, ','.join(out['header']) + "\n", zip(*out['data']), extension)
+
+# PARAMETER DISTRIBUTIONS ======================================================
+
+def make_parameter_distributions(tar, timepoints, keys, outfile, code, exclude=[]):
+    jsons = [load_json(member, tar) for member in tar.getmembers()]
+    json_time_inds = [(t, tp["time"]) for t, tp in enumerate(jsons[0]["timepoints"])
+        if format_time(tp['time']) in timepoints]
+
+    pops = [[0], [1], [2], [3], [4], [0, 1, 2, 3]]
+    parameters = ["NECRO_FRAC", "SENES_FRAC", "ENERGY_THRESHOLD", "MAX_HEIGHT", "ACCURACY",
+        "AFFINITY", "DEATH_AGE_AVG", "DIVISION_POTENTIAL", "META_PREF", "MIGRA_THRESHOLD"]
+    out = { param: [] for param in parameters }
+
+    def get_pop_stats(means0, means):
+        mu = np.mean(means) # estimate mean of mean data
+        sigma = sqrt(np.sum([(d - mu)**2 for d in means])/(len(means))) # estimate standard deviation of data
+
+        # two-tailed t test to compare means of parameters
+        _ , pmu = ttest_rel(list(means0), list(means))
+
+        # Levene test for equal variances
+        _ , psigma = levene(list(means0), list(means))
+
+        return {
+            "mu": mu,
+            "sigma": sigma,
+            "pmu": pmu,
+            "psigma": psigma
+        }
+
+    for p, param in enumerate(parameters):
+        for pop in pops:
+            # get distribution of means for starting time point
+            means0 = []
+            for json in jsons:
+                values = [c[4][p] for loc in json['timepoints'][2]['cells'] for c in loc[1] if c[1] in pop]
+                if len(values) > 0:
+                    means0.append(np.mean(values))
+
+            # get distributions of means for selected time points
+            for t, time in json_time_inds:
+                means = []
+
+                for json in jsons:
+                    values = [c[4][p] for loc in json['timepoints'][t]['cells'] for c in loc[1] if c[1] in pop]
+                    if len(values) > 0:
+                        means.append(np.mean(values))
+
+                if len(means) == 0:
+                    continue
+
+                # round to fix floating point errors
+                rounded_means = list(np.round(means, 10))
+                rounded_means0 = list(np.round(means0, 10))
+
+                entry = keys.copy()
+                entry['time'] = time
+                entry['data'] = rounded_means
+                entry['contains'] = pop
+                entry['stats'] = get_pop_stats(rounded_means0, rounded_means)
+                out[param].append(entry)
+
+    save_json(outfile + code, out, f".PARAMETERS")
