@@ -1,0 +1,226 @@
+<!DOCTYPE html>
+<html>
+    <head>
+        <meta charset="utf-8">
+        <link rel="stylesheet" href="css/style.css" />
+        <script src="https://d3js.org/d3.v4.min.js"></script>
+        <script type="text/javascript" src="js/browser.js"></script>
+        <script type="text/javascript" src="js/functions.js"></script>
+        <script type="text/javascript" src="js/utilities.js"></script>
+    </head>
+    <body>
+        <h1>delta maps</h1>
+        <div id="buttons">
+            <button id="generate">GENERATE</button>
+            <button id="save">SAVE</button>
+        </div>
+        <div id="options">
+            <div id="metrics">
+                <strong>METRIC</strong>
+                <label class="inputs"><input type="radio" name="metric" id="metric_GROWTH">growth rate</label>
+                <label class="inputs"><input type="radio" name="metric" id="metric_SYMMETRY">symmetry</label>
+                <label class="inputs"><input type="radio" name="metric" id="metric_CYCLES">cycle length</label>
+            </div>
+        </div>
+        <div id="canvas"></div>
+        <script>
+            var PREFIX = "delta_maps"
+            var SIZE = { "width": 714, "height": 199 }
+            var OPTIONS = [ "metrics" ]
+            var SELECTED = {
+                "radios": {
+                    "metric": "GROWTH",
+                }
+            }
+            var LABELS = {
+                "pops": {
+                    "X": "X",
+                    "A": "A",
+                    "B": "B",
+                    "C": "C",
+                },
+                "chet": {
+                    "00": "0",
+                    "10": "10",
+                    "20": "20",
+                    "30": "30",
+                    "40": "40",
+                    "50": "50",
+                },
+                "thet": {
+                    "00": "0",
+                    "10": "10",
+                    "20": "20",
+                    "30": "30",
+                    "40": "40",
+                    "50": "50",
+                },
+            }
+
+            initialize()
+
+            let C_AXIS = {
+                "GROWTH": {
+                    "scale": 30, // hexagon/day => um/day
+                    "bounds": [-10, 10], // um/day
+                },
+                "SYMMETRY": {
+                    "scale": 1,
+                    "bounds": [-0.4, 0.4],
+                },
+                "CYCLES": {
+                    "scale": 1/60.0, // min => hours
+                    "bounds": [-5, 5], // hours
+                }
+            }
+
+            function PROCESSOR() {
+                let selected = {
+                    "metric": SELECTED.radios.metric,
+                    "pops": ["X", "A", "B", "C"],
+                    "chet": ["00", "10", "20", "30", "40", "50"],
+                    "thet": ["00", "10", "20", "30", "40", "50"],
+                }
+
+                let name = function(arr) {
+                    return "POPULATION_HETEROGENEITY/POPULATION_HETEROGENEITY.SEEDS." + selected.metric + ".json"
+                }
+
+                let layout = ["pops"]
+                let make = processMake(layout, selected, [], name)
+                let p = processGrid(layout, selected, make)
+
+                return {
+                    "selected": selected,
+                    "layout": layout,
+                    "files": p.files,
+                    "margin": { "left": p.marginLeft, "top": p.marginTop,
+                        "right": 5, "bottom": 5, "axis": MAP_PADDING },
+                    "cols": p.nCols,
+                    "rows": p.nRows,
+                    "axis": {
+                        "x": { "bounds": [0, selected["thet"].length] },
+                        "y": { "bounds": [0, selected["chet"].length] },
+                        "c": C_AXIS[selected.metric]
+                    }
+                }
+            }
+
+            function PARSER(code, S, D) {
+                let row = "thet"
+                let col = "chet"
+                let rows = S.selected[row]
+                let cols = S.selected[col]
+
+                let pops = S.selected.pops[D.i[0]]
+                let d = D.data.data
+                    .filter(e => e.pops == pops)
+                    .filter(e => e.time == 15)
+
+                let dC = d.filter(e => e.context == "C")
+                let dCHX = d.filter(e => e.context == "CHX")
+
+                let bounds = S.axis.c.bounds
+                let cmap = d3.scaleLinear().range(COLORMAPS['div'])
+                    .domain(linspace(bounds[0], bounds[1], COLORMAPS['div'].length))
+                let negcmap = d3.scaleLinear().range(["#002", COLORMAPS['div'][0]])
+                    .domain([bounds[0]*6, bounds[0]])
+                let poscmap = d3.scaleLinear().range(["#200", COLORMAPS['div'][COLORMAPS['div'].length - 1]])
+                    .domain([bounds[0], bounds[1]*6])
+
+                let data = [
+                    {
+                        "*": "rect",
+                        "x": dCHX.map(e => rows.indexOf(e[row])),
+                        "y": dCHX.map(e => cols.indexOf(e[col]) + 1),
+                        "height": dCHX.map(e => 1),
+                        "width": dCHX.map(e => 1),
+                        "dh": dCHX.map(e => -0.5),
+                        "dw": dCHX.map(e => -0.5),
+                        "fill": dCHX.map(function(e) {
+                            let chx = e["_"]
+                            let c = dC.filter(f => f.chet == e.chet)[0]["_"]
+
+                            // Rescale symmetry metric denominator to 5 instead of 6.
+                            if (S.selected.metric == "SYMMETRY") {
+                                chx = chx.map(f => 1 - (6/5)*(1 - f))
+                                c = c.map(f => 1 - (6/5)*(1 - f))
+                            }
+
+                            let deltas = c.map((a, j) => (a - chx[j]))
+                            let v = deltas.reduce((a, b) => a + b)/deltas.length*S.axis.c.scale
+
+                            if (Math.abs(v) > Math.abs(bounds[1])) {
+                                if (Math.abs(v) > Math.abs(bounds[1])*6) { console.log(v) }
+                                if (v < 0) { return negcmap(v) }
+                                else { return poscmap(v) }
+                            }
+                            else { return cmap(v) }
+                        })
+                    }
+                ]
+
+                return { "data": [{ "id": "X", "x": 0, "y": 0, "data": data }], "rows": 1, "cols": 1 }
+            }
+
+            function LABELLER(S, P) { return labelGrid(S, P) }
+
+            function DECORATOR(g, S, i, p) {
+                let rows = S.selected["thet"]
+                let cols = S.selected["chet"]
+
+                let tx = PANEL_PADDING/2 + SUBPANEL_PADDING/2 + MAP_PADDING.left
+                let ty = PANEL_PADDING/2 + SUBPANEL_PADDING/2
+
+                S.G.append("g")
+                    .attr("transform", "translate("
+                        + ((i.length == 0 ? 0 : i.length < 3 ? S.panel.dw*i[0] :
+                            S.panel.dw*i[0]*S.selected[S.layout[2]].length + S.panel.dw*i[2]) + tx) + ","
+                        + (ty + S.subpanel.h + (i.length > 1 ? S.panel.dh*i[1] : 0)) + ")")
+                    .selectAll("text")
+                        .data(rows).enter()
+                        .append("text")
+                            .html(d => LABELS["thet"][d])
+                            .attr("y", 2)
+                            .attr("x", (d, i) => S.xscale(i + 0.5))
+                            .attr("font-family", "Courier")
+                            .attr("fill", "#000")
+                            .attr("text-anchor", "end")
+                            .attr("font-size", (FONT_SIZE - 2) + "pt")
+                            .attr("transform", (d, i) => "rotate(-90," + (S.xscale(i + 0.5) + FONT_SIZE/2 - 2) + ",2)")
+
+                S.G.append("g")
+                    .attr("transform", "translate("
+                        + ((i.length == 0 ? 0 : i.length < 3 ? S.panel.dw*i[0] :
+                            S.panel.dw*i[0]*S.selected[S.layout[2]].length + S.panel.dw*i[2]) + tx - 2*FONT_SIZE - 4) + ","
+                        + (ty + (i.length > 1 ? S.panel.dh*i[1] : 0)) + ")")
+                    .selectAll("text")
+                        .data(cols).enter()
+                        .append("text")
+                            .text(d => LABELS["chet"][d])
+                            .attr("x", FONT_SIZE)
+                            .attr("y", (d, i) => S.yscale(i + 0.5) + FONT_SIZE/2 - 1)
+                            .attr("font-family", "Courier")
+                            .attr("fill", "#000")
+                            .attr("text-anchor", "middle")
+                            .attr("font-size", (FONT_SIZE - 2) + "pt")
+
+                // Create and align groups for ticks.
+                let dx = alignHorzAxis(S, i)
+                let dy = alignVertAxis(S, i)
+
+                // Create group to hold ticks.
+                let G = S.G.append("g")
+                    .attr("id", "ticks")
+                    .attr("transform", "translate(" + dx + "," + dy + ")")
+
+                // Create axis labels.
+                let labels = []
+                labels.push(makeHorzLabel(S.subpanel.w, 0, alignHorzText(S), "Background Heterogeneity", "none"))
+                labels.push(makeVertLabel(S.subpanel.h, alignVertText(S), 0, "Heterogeneity", "none"))
+
+                addLabels(G, labels)
+            }
+        </script>
+    </body>
+</html>
