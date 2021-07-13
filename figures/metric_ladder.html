@@ -1,0 +1,214 @@
+<!DOCTYPE html>
+<html>
+    <head>
+        <meta charset="utf-8">
+        <link rel="stylesheet" href="css/style.css" />
+        <script src="https://d3js.org/d3.v4.min.js"></script>
+        <script type="text/javascript" src="js/browser.js"></script>
+        <script type="text/javascript" src="js/functions.js"></script>
+        <script type="text/javascript" src="js/utilities.js"></script>
+    </head>
+    <body>
+        <h1>metric ladder</h1>
+        <div id="buttons">
+            <button id="generate">GENERATE</button>
+            <button id="save">SAVE</button>
+        </div>
+        <div id="options">
+            <div id="metrics">
+                <strong>METRIC</strong>
+                <label class="inputs"><input type="radio" name="metric" id="metric_GROWTH">growth rate</label>
+                <label class="inputs"><input type="radio" name="metric" id="metric_SYMMETRY">symmetry</label>
+                <label class="inputs"><input type="radio" name="metric" id="metric_CYCLES">cycle length</label>
+            </div>
+            <div id="views">
+                <strong>VIEW</strong>
+                <label class="inputs"><input type="radio" name="view" id="view_chet">heterogeneity</label>
+                <label class="inputs"><input type="radio" name="view" id="view_thet">tissue heterogeneity</label>
+            </div>
+        </div>
+        <div id="canvas"></div>
+        <script>
+            var PREFIX = "metric_ladder"
+            var SIZE = { "width": 300, "height": 300 }
+            var OPTIONS = [ "metrics", "views" ]
+            var SELECTED = {
+                "radios": {
+                    "metric": "GROWTH",
+                    "view": "chet",
+                }
+            }
+            var LABELS = {
+                "pops": {
+                    "X": "X",
+                    "A": "A",
+                    "B": "B",
+                    "C": "C",
+                },
+            }
+
+            initialize()
+
+            let Y_AXIS = {
+                "GROWTH": {
+                    "scale": 30, // hexagon/day => um/day
+                    "bounds": [0, 150], // um/day
+                    "title": 'Growth Rate (\u03BCm/day)',
+                    "n": 4,
+                    "padding": 2
+                },
+                "SYMMETRY": {
+                    "scale": 1,
+                    "bounds": [0.4, 1],
+                    "title": 'Symmetry',
+                    "n": 4,
+                    "padding": 0.03
+                },
+                "CYCLES": {
+                    "scale": 1/60.0, // min => hours
+                    "bounds": [16, 24], // hours
+                    "title": "Average Cell Cycle Length (hours)",
+                    "n": 5,
+                    "padding": 0.5
+                }
+            }
+
+            function PROCESSOR() {
+                let selected = {
+                    "metric": SELECTED.radios.metric,
+                    "view": SELECTED.radios.view,
+                }
+
+                let name = function(arr) {
+                    return "POPULATION_HETEROGENEITY/POPULATION_HETEROGENEITY.SEEDS." + selected.metric + ".json"
+                }
+
+                let make = processMake([], selected, [], name)
+                let p = processGrid([], selected, make)
+
+                return {
+                    "selected": selected,
+                    "layout": [],
+                    "files": p.files,
+                    "margin": { "left": p.marginLeft, "top": p.marginTop,
+                        "right": 5, "bottom": 5, "axis": AXIS_PADDING },
+                    "cols": p.nCols,
+                    "rows": p.nRows,
+                    "axis": {
+                        "x": {
+                            "bounds": [-0.5, 3.5],
+                            "n": 9,
+                            "labels": function(e, i) {
+                                let names = ["", "X", "", "A", "", "B", "", "C", ""]
+                                return names[i]
+                            }
+                        },
+                        "y": Y_AXIS[selected.metric]
+                    }
+                }
+            }
+
+            function PARSER(code, S, D) {
+                let view = S.selected.view
+                let hets = ["00", "10", "20", "30", "40", "50"]
+                let pops = ["X", "A", "B", "C"]
+                let contexts = ["C", "CHX"]
+
+                let color = "#ccc"
+
+                let colors = {
+                    "00": "#aaa",
+                    "10": "#888",
+                    "20": "#666",
+                    "30": "#444",
+                    "40": "#222",
+                    "50": "#000"
+                }
+
+                let dashes = {
+                    "C": "none",
+                    "CHX": "3,1"
+                }
+
+                var seed = 1
+
+                function getRandom() {
+                    let x = Math.sin(seed++) * 10000
+                    return (x - Math.floor(x) - 0.5)*1
+                }
+
+                let d = D.data.data
+                    .filter(e => e.time == 15)
+                    .filter(e => e.pops.split("").length == 1)
+
+                let data = []
+
+                hets.map(function(het) {
+                    pops.map(function(pop, i) {
+                        contexts.map(function(context) {
+                            let values = []
+
+                            let dd = d.filter(e => e.context == context)
+                                .filter(e => e.pops == pop)
+                                .filter(e => e[view] == het)
+                                .map(e => e["_"].map(f => values.push(f*S.axis.y.scale)))
+
+                            // Rescale symmetry metric denominator to 5 instead of 6.
+                            if (S.selected.metric == "SYMMETRY") {
+                                values = values.map(f => 1 - (6/5)*(1 - f))
+                            }
+
+                            if (values.length > 0) {
+                                let mean = values.reduce((a, b) => a + b)/values.length
+                                data.push({
+                                    "*": "path",
+                                    "y": [mean, mean],
+                                    "x": [i - 0.5, i + 0.5],
+                                    "width": 1,
+                                    "stroke": (view == "thet" && context == "C" ? color : colors[het]),
+                                    "dash": dashes[context]
+                                })
+                            }
+
+                        })
+                    })
+                })
+
+                d.map(function(dd) {
+                    let means = [dd['_'].reduce((a,b) => a + b)/dd["_"].length]
+                    let x = means.map(e => "XABC".indexOf(dd.pops) + 0.4*getRandom())
+                    let y = means.map(e => e*S.axis.y.scale)
+                    let f = means.map(e => dd.context == "C" ? "none" : colors[dd[view]] )
+                    let s = means.map(e => dd.context == "C" ? (view == "tget" ? color : colors[dd[view]]) : "none" )
+                    let r = means.map(e => dd.context == "C" ?  2 : 1.5)
+
+                    if (S.selected.metric == "SYMMETRY") {
+                        y = y.map(f => 1 - (6/5)*(1 - f))
+                    }
+
+                    data.push({
+                        "*": "circle",
+                        "r": r,
+                        "x": x,
+                        "y": y,
+                        "fill": f,
+                        "stroke": s,
+                    })
+                })
+
+                return { "data": [{ "id": "X", "x": 0, "y": 0, "data": data }], "rows": 1, "cols": 1 }
+            }
+
+            function LABELLER(S, P) { return labelGrid(S, P) }
+
+            function DECORATOR(g, S, i, p) {
+                decorateTicks(g, S, i, p)
+
+                let gg = g.insert("g",":first-child")
+
+                let indices = [0, 1, 2]
+                indices.map(ind => addLine(gg, S.xscale(ind + 0.5), S.xscale(ind + 0.5), 0, S.subpanel.h, "#eee", "1px"))
+            }
+        </script>
+    </body>
+</html>
