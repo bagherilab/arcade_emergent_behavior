@@ -556,3 +556,29 @@ def make_parameter_distributions(tar, timepoints, keys, outfile, code, exclude=[
                 out[param].append(entry)
 
     save_json(outfile + code, out, f".PARAMETERS")
+
+# STATS MAP ====================================================================
+
+def merge_stats_maps(file, out, keys, extension, code, tar=None):
+    """Merge metrics for stats heatmap."""
+    filepath = f"{file}{code.replace('CHX', 'CH')}{extension}.json"
+
+    if tar:
+        D = load_json(filepath.split("/")[-1], tar=tar)
+    else:
+        D = load_json(filepath)
+
+    out["header"] = list(keys.keys()) + ["parameter", "mu", "sigma", "pmu", "psigma"]
+    values = list(keys.values())
+
+    parameters = ["MAX_HEIGHT", "META_PREF", "MIGRA_THRESHOLD"]
+
+    for p, param in enumerate(parameters):
+        for entry in D[param]:
+            if len(entry['contains']) == 4 and entry["time"] == keys["time"]:
+                entry_stats = entry['stats']
+                row = values + [param, entry_stats['mu'], entry_stats['sigma'], entry_stats['pmu'], entry_stats['psigma']]
+                out['data'].append(row)
+
+def save_stats_maps(file, extension, out):
+    save_csv(file, ','.join(out['header']) + "\n", zip(*out['data']), ".STATS")

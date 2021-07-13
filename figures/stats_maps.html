@@ -1,0 +1,268 @@
+<!DOCTYPE html>
+<html>
+    <head>
+        <meta charset="utf-8">
+        <link rel="stylesheet" href="css/style.css" />
+        <script src="https://d3js.org/d3.v4.min.js"></script>
+        <script type="text/javascript" src="js/browser.js"></script>
+        <script type="text/javascript" src="js/functions.js"></script>
+        <script type="text/javascript" src="js/utilities.js"></script>
+    </head>
+    <body>
+        <h1>stats maps</h1>
+        <div id="buttons">
+            <button id="generate">GENERATE</button>
+            <button id="save">SAVE</button>
+        </div>
+        <div id="options">
+            <div id="params">
+                <strong>PARAMETER</strong>
+                <label class="inputs"><input type="radio" name="param" id="param_MAX-HEIGHT">crowding tolerance</label>
+                <label class="inputs"><input type="radio" name="param" id="param_META-PREF">metabolic preference</label>
+                <label class="inputs"><input type="radio" name="param" id="param_MIGRA-THRESHOLD">migratory threshold</label>
+            </div>
+            <div id="stats">
+                <strong>STAT</strong>
+                <label class="inputs"><input type="radio" name="stat" id="stat_mu">mu</label>
+                <label class="inputs"><input type="radio" name="stat" id="stat_sigma">sigma</label>
+            </div>
+        </div>
+        <div id="canvas"></div>
+        <script>
+            var PREFIX = "stats_maps"
+            var SIZE = { "width": 796, "height": 199 }
+            var OPTIONS = [ "params", "stats" ]
+            var SELECTED = {
+                "radios": {
+                    "param": "MAX-HEIGHT",
+                    "stat": "mu"
+                }
+            }
+            var LABELS = {
+                "pops": {
+                    "X": "X",
+                    "A": "A",
+                    "B": "B",
+                    "C": "C",
+                },
+                "chet": {
+                    "00": "0",
+                    "10": "10",
+                    "20": "20",
+                    "30": "30",
+                    "40": "40",
+                    "50": "50",
+                },
+                "thet": {
+                    "X": "&#8226;",
+                    "00": "0",
+                    "10": "10",
+                    "20": "20",
+                    "30": "30",
+                    "40": "40",
+                    "50": "50",
+                },
+            }
+
+            initialize()
+
+            var C_AXIS = {
+                "MAX-HEIGHT": {
+                    "reference": [8.7, 13.05, 8.7, 8.7],
+                    "mu": [-20, 20],
+                    "sigma": [-5, 5]
+                },
+                "META-PREF": {
+                    "reference": [0.3, 0.3, 0.45, 0.3],
+                    "mu": [-0.1, 0.1],
+                    "sigma": [-0.1, 0.1]
+                },
+                "MIGRA-THRESHOLD": {
+                    "reference": [3, 3, 3, 1.5],
+                    "mu": [-0.8, 0.8],
+                    "sigma": [-1, 1]
+                },
+            }
+
+            function PROCESSOR() {
+                let selected = {
+                    "param": SELECTED.radios.param,
+                    "stat": SELECTED.radios.stat,
+                    "pops": ["X", "A", "B", "C"],
+                    "chet": ["00", "10", "20", "30", "40", "50"],
+                    "thet": ["X", "00", "10", "20", "30", "40", "50"],
+                }
+
+                let name = function(arr) {
+                    return "POPULATION_HETEROGENEITY/POPULATION_HETEROGENEITY.STATS.csv"
+                }
+
+                let layout = ["pops"]
+                let make = processMake(layout, selected, [], name)
+                let p = processGrid(layout, selected, make)
+
+                return {
+                    "selected": selected,
+                    "layout": layout,
+                    "files": p.files,
+                    "margin": { "left": p.marginLeft, "top": p.marginTop,
+                        "right": 5, "bottom": 5, "axis": MAP_PADDING },
+                    "cols": p.nCols,
+                    "rows": p.nRows,
+                    "axis": {
+                        "x": { "bounds": [0, selected["thet"].length] },
+                        "y": { "bounds": [0, selected["chet"].length] },
+                        "c": C_AXIS[selected.param]
+                    }
+                }
+            }
+
+            function PARSER(code, S, D) {
+                let row = "thet"
+                let col = "chet"
+                let rows = S.selected[row]
+                let cols = S.selected[col]
+
+                let pops = S.selected.pops[D.i[0]]
+                let d = D.data
+                    .filter(e => e.time == 15)
+                    .filter(e => e.pops == pops)
+                    .filter(e => e.parameter == S.selected.param.replace("-","_"))
+
+                let caxis = S.axis.c
+                let stat = S.selected.stat
+                switch(stat) {
+                    case "mu":
+                        let mu = caxis.mu
+                        var cmap = d3.scaleLinear().range(COLORMAPS['div'])
+                            .domain(linspace(mu[0], mu[1], COLORMAPS['div'].length))
+                        break
+                    case "sigma":
+                        let sigma = caxis.sigma
+                        var cmap = d3.scaleLinear().range(COLORMAPS['div'])
+                            .domain(linspace(sigma[0], sigma[1], COLORMAPS['div'].length))
+                        break
+                }
+
+                let data = [
+                    {
+                        "*": "rect",
+                        "x": d.map(e => (e.context == "C" ? 0 : rows.indexOf(e[row]))),
+                        "y": d.map(e => cols.indexOf(e[col]) + 1),
+                        "height": d.map(e => 1),
+                        "width": d.map(e => 1),
+                        "dh": d.map(e => -0.5),
+                        "dw": d.map(e => -0.5),
+                        "fill": d.map(function(e) {
+                            let m = Number(e[stat])
+                            let index = "XABC".indexOf(e.pops)
+                            let m0 = Array.isArray(caxis.reference) ? caxis.reference[index] : caxis.reference
+
+                            if (stat == "mu") {
+                               m = m - m0
+                               if (m < caxis.mu[0]) { console.log(m) }
+                               if (m > caxis.mu[1]) { console.log(m) }
+                               return (isNaN(m) ? "url(#stripe)" : cmap(m))
+                            } else if (stat == "sigma") {
+                                m = m - m0*Number(e.chet)/100/Math.sqrt(20)
+                                if (m < caxis.sigma[0]) { console.log(m) }
+                                if (m > caxis.sigma[1]) { console.log(m) }
+                                return (isNaN(m) ? "url(#stripe)" : cmap(m))
+                            }
+                        })
+                    }
+                ]
+
+                data.push({
+                    "*": "rect",
+                    "x": d.map(e => (e.context == "C" ? 0 : rows.indexOf(e[row]))),
+                    "y": d.map(e => cols.indexOf(e[col]) + 1),
+                    "height": d.map(e => 1),
+                    "width": d.map(e => 1),
+                    "dh": d.map(e => -2),
+                    "dw": d.map(e => -2),
+                    "dx": d.map(e => 0.75),
+                    "dy": d.map(e => 0.75),
+                    "fill": d.map(e => "none"),
+                    "stroke": d.map(function(e) {
+                        let m = Number(e["p" + stat])
+                        if (isNaN(m)) { return "none" }
+                        else if (m <= 0.001) { return "#000" }
+                        else if (m <= 0.01) { return "#555" }
+                        else if (m <= 0.05) { return "#999" }
+                        else { return "none" }
+                    }),
+                    "dash": d.map(function(e) {
+                        let m = Number(e["p" + stat])
+                        if (isNaN(m)) { return "none" }
+                        else if (m <= 0.001) { return "none" }
+                        else if (m <= 0.01) { return "2,1" }
+                        else if (m <= 0.05) { return "2,3" }
+                        else { return "none" }
+                    })
+                })
+
+                return { "data": [{ "id": "X", "x": 0, "y": 0, "data": data }], "rows": 1, "cols": 1 }
+            }
+
+            function LABELLER(S, P) { return labelGrid(S, P) }
+
+            function DECORATOR(g, S, i, p) {
+                let rows = S.selected["thet"]
+                let cols = S.selected["chet"]
+
+                let tx = PANEL_PADDING/2 + SUBPANEL_PADDING/2 + MAP_PADDING.left
+                let ty = PANEL_PADDING/2 + SUBPANEL_PADDING/2
+
+                S.G.append("g")
+                    .attr("transform", "translate("
+                        + ((i.length == 0 ? 0 : i.length < 3 ? S.panel.dw*i[0] :
+                            S.panel.dw*i[0]*S.selected[S.layout[2]].length + S.panel.dw*i[2]) + tx) + ","
+                        + (ty + S.subpanel.h + (i.length > 1 ? S.panel.dh*i[1] : 0)) + ")")
+                    .selectAll("text")
+                        .data(rows).enter()
+                        .append("text")
+                            .html(d => LABELS["thet"][d])
+                            .attr("y", 2)
+                            .attr("x", (d, i) => S.xscale(i + 0.5))
+                            .attr("font-family", "Courier")
+                            .attr("fill", "#000")
+                            .attr("text-anchor", "end")
+                            .attr("font-size", (FONT_SIZE - 2) + "pt")
+                            .attr("transform", (d, i) => "rotate(-90," + (S.xscale(i + 0.5) + FONT_SIZE/2 - 2) + ",2)")
+
+                S.G.append("g")
+                    .attr("transform", "translate("
+                        + ((i.length == 0 ? 0 : i.length < 3 ? S.panel.dw*i[0] :
+                            S.panel.dw*i[0]*S.selected[S.layout[2]].length + S.panel.dw*i[2]) + tx - 2*FONT_SIZE - 4) + ","
+                        + (ty + (i.length > 1 ? S.panel.dh*i[1] : 0)) + ")")
+                    .selectAll("text")
+                        .data(cols).enter()
+                        .append("text")
+                            .text(d => LABELS["chet"][d])
+                            .attr("x", FONT_SIZE)
+                            .attr("y", (d, i) => S.yscale(i + 0.5) + FONT_SIZE/2 - 1)
+                            .attr("font-family", "Courier")
+                            .attr("fill", "#000")
+                            .attr("text-anchor", "middle")
+                            .attr("font-size", (FONT_SIZE - 2) + "pt")
+
+                // Create and align groups for ticks.
+                let dx = alignHorzAxis(S, i)
+                let dy = alignVertAxis(S, i)
+
+                // Create group to hold ticks.
+                let G = S.G.append("g")
+                    .attr("id", "ticks")
+                    .attr("transform", "translate(" + dx + "," + dy + ")")
+
+                // Create axis labels.
+                let labels = []
+                labels.push(makeHorzLabel(S.subpanel.w, 0, alignHorzText(S), "Background Heterogeneity", "none"))
+                labels.push(makeVertLabel(S.subpanel.h, alignVertText(S), 0, "Heterogeneity", "none"))
+
+                addLabels(G, labels)
+            }
+        </script>
+    </body>
+</html>
